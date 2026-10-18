@@ -10,7 +10,7 @@
 #include "system.h"
 #include "astring.h"
 
-#if defined WIN32
+#if defined WIN32 || defined __minix
 static unsigned temper(unsigned x)
 {
 	x ^= x>>11;
@@ -29,11 +29,17 @@ static int rand_r(unsigned *seed)
 
 char* sys_maketempfile(const char* prefix, const char* suffix)
 {
+#if defined __minix
+	/* Minix 2.0.4 (the rosco build of the passes): no clock_gettime() */
+	unsigned int seed = (unsigned int)(long)prefix
+		^ (unsigned int)time(NULL) ^ (unsigned int)getpid();
+#else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 
 	unsigned int seed = (unsigned int)(intptr_t)prefix
 		^ (unsigned int)ts.tv_sec ^ (unsigned int)ts.tv_nsec;
+#endif
 	const char* tempdir = sys_gettmpdir();
 
 	for (;;)
