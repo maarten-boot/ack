@@ -51,7 +51,7 @@ con_mult(word sz) {
 
 	if ((sz != 4) && (sz != 8))
 		fatal("bad icon/ucon size");
-	fprintf(codefile,".data8\t%s\n", str);
+	fprintf(codefile,".data%d\t%s\n", (int)sz, str);
 }
 
 #define IEEEFLOAT
