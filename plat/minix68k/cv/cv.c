@@ -80,12 +80,17 @@ static void minixhead(void)
 	if ((mh[0] & 0x00200000L) == 0) /* not SEPARATE */
 		mh[6] += mh[2];
 	mh[7] = 0;
+	/* 32 big endian bytes, whatever the size of a long on the host */
+	unsigned char hb[32];
 	for (i = 0; i < 8; i++)
 	{
-		cvlong(&mh[i]);
+		hb[4 * i] = mh[i] >> 24;
+		hb[4 * i + 1] = mh[i] >> 16;
+		hb[4 * i + 2] = mh[i] >> 8;
+		hb[4 * i + 3] = mh[i];
 	}
 
-	if (write(output, (char*)mh, sizeof(mh)) != sizeof(mh))
+	if (write(output, (char*)hb, sizeof(hb)) != sizeof(hb))
 		fatal("write error\n");
 }
 
