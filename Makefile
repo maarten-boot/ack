@@ -5,12 +5,12 @@
 
 # What platform to build for by default?
 
-DEFAULT_PLATFORM ?= pc86
+DEFAULT_PLATFORM ?= minix68k
 
 # Which architectures should get built?
 
 $(if $(PLATS), $(error Don't set PLATS on the command line, because reasons. Edit the Makefile instead.))
-PLATS = all
+PLATS = minix68k
 # PLATS = linux386 linuxppc linuxmips
 
 # Where should the ACK put its temporary files?
