@@ -365,3 +365,30 @@ Decisions still open for this step:
 
 - Link the minix2 and bbcbasic projects; then decide F1 (soft-float vs FPU), F5.
 - Whether to keep/limit/disable the existing `ccpp.yml` and `release.yml` on this fork.
+
+---
+
+## Session 2 — 2026-10-24
+
+### Decision: keep `ccpp.yml` and `release.yml`, update and pin all actions
+
+`release.yml` only runs on pushes to `default`, so it is inactive on `rosco-minix68k`;
+the CI (`ccpp.yml`) is useful to keep. All actions are now pinned to the commit SHA of
+their latest release (looked up with `git ls-remote --tags`; all run on node24):
+
+| action | was | now |
+|---|---|---|
+| `actions/checkout` | `@v3` | `v7.0.1` `3d3c42e5aac5ba805825da76410c181273ba90b1` |
+| `msys2/setup-msys2` | `@v2` | `v2.33.0` `ec48f7c5447b3140e2b088413ae3a55687bccb6e` |
+| `actions/upload-artifact` | `@v4` | `v7.0.2` `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
+| `softprops/action-gh-release` | `@v1` | `v3.0.3` `e598afbe1493e6b1bafb1f389cabb956eab91231` |
+| `mknejp/delete-release-assets` | `@v1` | **removed** |
+
+- `mknejp/delete-release-assets` no longer has any tags (so `@v1` cannot resolve) and
+  runs on deprecated node20. It is not needed: `action-gh-release` overwrites assets with
+  the same name (`overwrite_files` defaults to `true`).
+- `release.yml` got `permissions: contents: write`, needed for `git push -f origin dev`
+  and the release update with today's read-only default `GITHUB_TOKEN`.
+- Not changed (still open): `concurrency.group` uses `github.head_ref`, which is empty on
+  pushes, so pushes to different branches cancel each other (`github.head_ref || github.ref`
+  would fix it); `release.yml` still tags as "davidgiven".
