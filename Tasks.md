@@ -132,38 +132,39 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 
 ## Low
 
-- [ ] **N1 — `getln()` writes before its buffer.** `util/cmisc/tabgen.c:353`: after
+- [x] **N1 — `getln()` writes before its buffer** (fixed 2026-10-29). `util/cmisc/tabgen.c:353`: after
   `while (n--)` runs out, `n` is -1 and `s[n - 1] = '\0'` writes `s[-2]` (lines longer
   than the buffer). Fix: remember the size and write `s[size - 1]`.
-- [ ] **N2 — wrong printf type in stabs output.** `lang/cem/cemcom.ansi/stab.c:217`
+- [x] **N2 — wrong printf type in stabs output** (fixed 2026-10-29, with the others listed). `lang/cem/cemcom.ansi/stab.c:217`
   prints `int fd_width` with `%ld`: the bit-field width in `-g` debug info can be
   garbage on a 64-bit host. Fix: `(long)` cast. Same class, harmless output only:
   `util/amisc/anm.c:316`, `ashow.c:136-140,192,249`, `asize.c:60` (`uint32_t` with
   `%lx`/`%ld`), `util/ego/share/alloc.c:38` (`size_t` with `%u`),
   `lang/basic/src/basic.lex:332,425` (debug printfs).
-- [ ] **N3 — format strings from data.** `util/arch/archiver.c:476`,
+- [x] **N3 — format strings from data** (fixed 2026-10-29). `util/arch/archiver.c:476`,
   `lang/cem/cpp.ansi/error.c:33`, `lang/basic/src/basic.g:242`, `basic.lex:247` pass a
   non-literal as the format; a `%` in a file or symbol name would be interpreted.
   Fix: `"%s"`.
-- [ ] **N4 — fragile code that works today.** `lang/basic/src/func.c:20` `cv()`
+- [x] **N4 — fragile code that works today** (fixed 2026-10-29; `rotate()` also
+  shifted a negative `w`). `lang/basic/src/func.c:20` `cv()`
   expands to two statements (used after `else` at `:96`, harmless now; wrap in
   `do { } while (0)`); `lang/basic/src/parsepar.c:39-87` indentation suggests the
   `files < 3` check is inside the loop (it is not, correctly); `util/opt/peephole.c:266`
   shifts a negative value (UB; use `~(offset)0 << amount`).
-- [ ] **F6 — `plat/minix68k/boot.s`** comes from the "Bleasdale" port (`:13`, `:30`);
+- [x] **F6 — `plat/minix68k/boot.s`** (comments fixed 2026-10-29; code unchanged) comes from the "Bleasdale" port (`:13`, `:30`);
   `clr.l -4(a0)` (`:34`) relies on the Minix-ST stack layout; `add #010,sp` (`:55`)
   does not match what was pushed. Comment and test on rosco.
 - [ ] **F7 — `modules/src/system/maketempfile.c`**: the `__minix` branch never
   triggers with this ACK (see F4 `CPP_F`); with 16-bit `unsigned` the `temper()`
   shifts (`x>>18`) are undefined. Use `unsigned long` under `__minix`.
-- [ ] **F8 — `cv.c` small issues:** `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
+- [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob remains): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
   16 KB buffer per chunk; `chmem()` (`:333`) can return an uninitialised `new`.
   `plat/minix68k/libsys/build.py:11-13` globs `plat/minix/libsys`, which does not exist.
 - [ ] **F9 — build system:** `build/_sandbox.py:24,35,46` breaks with an `OBJ=`
   outside the tree (`join()` with an absolute or `..` path); `Makefile:13` refuses
   `PLATS=` on the command line (`PLATS ?=` would help upstreaming); `.drone.yml` and
   `.travis.yml` are dead.
-- [ ] **N5 — signed `char` as array index** (11 places, e.g.
+- [x] **N5 — signed `char` as array index** (fixed 2026-10-29 at the call sites) (11 places, e.g.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
   to `unsigned char` in the class macros.

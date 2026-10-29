@@ -411,3 +411,32 @@ User:
   minix68k library members and the start-up objects are byte-identical to the
   `minix68k-20261029` release; the whole suite passes at `-O` and with all libraries
   and tests built at `-O3` (47/47 each).
+
+### Small-fix batch (N1-N5, F6, F8)
+
+User:
+> i pushed (CI for `c2ba85b12` passed)
+> yes start with the small-fix batch
+
+- N1 `util/cmisc/tabgen.c` `getln()`: stop one short and terminate at `s[n-1]`
+  (was `s[-2]` when a line filled the buffer). ASan: the old code reports
+  "stack-buffer-underflow, WRITE of size 1" at `tabgen.c:353` on a 5000-character
+  line, the new one nothing.
+- N2 printf types: `stab.c` bit-field width `(long)` for `%ld` (`-g` output);
+  `anm`/`ashow`/`asize` `uint32_t` cast to `unsigned long` (`%lu`/`%lx`); ego
+  `coreusage` `size_t` as `%lu`; BASIC lexer debug output `%p` and `%ld`.
+- N3 non-literal formats → `"%s"`: `archiver.c` (member names), cpp `err_hdr`,
+  BASIC `DATA` floats and the `-E` source listing (a `%` in a BASIC line was read as a
+  format).
+- N4 `cv()` macro wrapped in `do { } while (0)`; `parsepar.c` indentation;
+  `peephole.c` `rotate()` shifts as `unsigned long` (both shifts could shift a
+  negative value).
+- N5 `(unsigned char)` at the char-indexed sites (cemcom `LLlex.c` and
+  `options.c`, cpp `domacro.c` and `options.c`, m2 `LLlex.c`, ego `alloc.c`); the
+  class macros are unchanged (some lexers index tables with EOI = -1).
+- F8 `cv.c`: `%d` for `oh_nsect`, `chmem()` `default` is a fatal error,
+  `emits()` uses one static buffer instead of a malloc per 16K. F6 `boot.s`:
+  comments only (what the code does with the Minix stack, `add #010,sp`).
+- Checked with two clean builds (baseline and batch, plain `make`): 47/47 tests each;
+  all 106 minix68k programs/objects and 521 archive members byte-identical; the five
+  character tables `tabgen` generates identical (only the `tabgen` binary differs).
