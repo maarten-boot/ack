@@ -22,6 +22,7 @@ var PLATFORMDIR={SHAREDIR}/{PLATFORM}
 var CPP_F=-D__unix -D__minix -D__m68k -D__mc68000 -D__mc68010 -D_ATARI_ST
 var ALIGN=-a0:4 -a1:4 -a2:4 -a3:4
 var MACHOPT_F=-ml10
+var EGO_PLAT_FLAGS=-M{EM}/share/ack/ego/{ARCH}.descr
 
 # Override the setting in fe so that files compiled for this platform can see
 # the platform-specific headers.
