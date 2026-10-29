@@ -14,7 +14,9 @@
 	cmp	2(a0),d0
 	ble	2f
 1:
+	move.l	a1,-(sp)	! .trp and the trap handler may change a1
 	move.w	#ERANGE,-(sp)
 	jsr	.trp
+	rts
 2:
 	jmp	(a1)
