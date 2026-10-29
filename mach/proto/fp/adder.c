@@ -43,6 +43,6 @@ register	B64	*e1,*e2;
 	fflush(stdout);
 # endif
 	if ((carry) && (++e1->h_32 == 0))
-		return(true);		/* had a 64 bit overflow */
+		return(1);		/* had a 64 bit overflow */
 	return(overflow);		/* return status from higher add */
 }
