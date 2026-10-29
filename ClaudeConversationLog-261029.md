@@ -211,3 +211,27 @@ nothing was changed there.
     libc/libsys; to test the board's real combination it could later also run
     programs linked like `acc-minix` does (Minix 2.0.4 libc), adding the 2.0.4-only
     calls they use.
+
+### P1: the assembler's eamode[] as long
+
+User:
+> start with P1
+
+- Took the two assembler hunks of the minix project's `ack-minix68k.patch` (read
+  only from `../minix-st-2.0.4/src/rosco/ack/`; same upstream base, applied
+  unchanged): `mach/m68k2/as/mach1.c` `eamode[]` is `long` with
+  `(long)(...)<<8` entries, and `flag` in `ea_1()` (`mach5.c`) is `long`. `ea_1()` is
+  the only reader of `eamode[]`; `newrelo()` still gets the type as an `int`, which
+  keeps RELPC (0x2000) in 16 bits.
+- Why: `(RELO2|RELPC)<<8` = 0x200200 does not fit a 16-bit `int`. Shown with this
+  fork's own tools: the same table entry compiled with ACK for minix68k
+  (`sizeof(int)` 2) and run in the emulator gives relocation type 0x2 (RELPC lost;
+  ACK warns "overflow in constant expression"), the `long` version 0x2002; with the
+  host gcc both give 0x2002. So the host assembler never showed the bug; the
+  assembler built with gcc `-mshort` for the board did (their Follow-up 42).
+- Host build unchanged: a clone with the change (`make`, all 41 minix68k tests
+  pass) against the build before it: all 95 linked programs, objects and
+  examples except one are byte-identical, and all 484 members of the 8 archives are
+  identical (the archives differ only in their headers). The exception,
+  `hilo_bas_minix68k.exe`, is not reproducible even with the same toolchain (two
+  compiles differ in one byte of code): new task N8.

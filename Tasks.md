@@ -79,7 +79,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
     but not implemented). They are only used by ACK's tests and examples. Optional:
     bring them to 2.0.4 later, or let the emulator also run programs linked against
     the 2.0.4 C library (as `acc-minix` links), adding the 2.0.4-only calls they use.
-- [ ] **P1 — take over the minix project's `-mshort` assembler fix.**
+- [x] **P1 — take over the minix project's `-mshort` assembler fix** (done 2026-10-29).
   `mach/m68k2/as/mach1.c` (`eamode[]`) and `mach5.c` (`flag` in `ea_1()`) must be
   `long`: `(RELO2|RELPC)<<8` does not fit a 16-bit `int` when the assembler is built
   with gcc `-mshort` to run on the board (RELPC lost, `jsr d16(pc)` relocated).
@@ -141,6 +141,11 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
   to `unsigned char` in the class macros.
+- [ ] **N8 — BASIC compiles are not reproducible.** Compiling `examples/hilo.bas`
+  twice with the same toolchain gives binaries that differ in one byte of code, an
+  absolute address operand (0x0001C870 vs 0x0001B870): looks like uninitialised
+  memory in the BASIC front end (`lang/basic/src`, `em_bem`). Matters for T3 (BASIC
+  tests) and for comparing builds. Check with valgrind/ASan on `em_bem`.
 - [ ] **N6 — merge commit with a placeholder identity.** `c50619962` ("sync from
   upstream", 2026-10-29) is authored by `Your Name <you@example.com>`: set
   `user.name`/`user.email` on the machine that made it. History is pushed, so leave
