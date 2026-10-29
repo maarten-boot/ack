@@ -239,7 +239,7 @@ dataelm : INTVALUE		{ fprintf(datfile,"%d",ival); }
 	| '-' [ INTVALUE	{ fprintf(datfile,"%d",-ival); }
 	      | FLTVALUE	{ fprintf(datfile,"-%s",dval); }
 	      ]
-	| FLTVALUE		{ fprintf(datfile,dval); }
+	| FLTVALUE		{ fprintf(datfile,"%s",dval); }
 	| STRVALUE		{ fprintf(datfile,"\"%s\"",sval); }
 	| IDENTIFIER		{ fprintf(datfile,"\"%s\"",sval); }
 	;
