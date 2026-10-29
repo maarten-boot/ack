@@ -268,3 +268,24 @@ User:
   gave it an 866-byte stack. Also: build clones in the scratch area used all inodes
   of `/tmp` ("No space left on device" with 4.5 GB free); removed, and clones are
   now deleted after each check.
+
+### Kahan's Paranoia on the soft-float
+
+User:
+> i added a tmp/ and a .gitignore. in the tmp you find the paranoia.c and
+> paranoia.sh for the ieee test, is that what you need ?
+
+- `tmp/paranoia.c` is Kahan's floating point test (C version, Sumner/Gay);
+  `tmp/paranoia.sh` builds it with host gcc into `~/binc` (not run). `.gitignore`
+  holds `tmp/`.
+- Built in the scratch area with ACK for minix68k (scratch copy without its own
+  `extern int read(int, char*, int);`, which clashes with ACK's `unistd.h`) and run
+  in the emulator, fed newlines; reference: host gcc.
+- Verdict: ACK minix68k "Satisfactory though flawed" (2 FLAWs), host "Excellent".
+  Differences: `*`, `/`, `+`/`-` neither correctly rounded nor chopped, sticky bit
+  wrong; overflow saturates instead of infinity; unbalanced range at the underflow
+  threshold (all `mach/proto/fp`); `sqrt` not correctly rounded, `pow(0,0)` = 0,
+  `%.17e` gives 16 digits (ACK's C library). New task F1b; T10 now uses Paranoia.
+- Correction: the F1 entry above called the arithmetic "bit-exact" after a small
+  differential test; that test only used cases that happen to round right.
+  Paranoia's more thorough checks show the rounding is not IEEE-correct.

@@ -15,6 +15,16 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   (`mach/proto/fp/build.py`) and replaces `fp68881.s` in the m68k2 libem, so link
   lines stay the same. minix68k runs the `floats` set (46/46 pass); a bit-exact
   comparison with host gcc matches except `sqrt` (1 ulp, libm).
+- [ ] **F1b — soft-float is not IEEE-exact** (Kahan's Paranoia, 2026-10-29: ACK
+  minix68k "Satisfactory though flawed", host gcc "Excellent"). From
+  `mach/proto/fp`: `*`, `/`, `+`, `-` are "neither chopped nor correctly rounded",
+  sticky bit wrong; overflow saturates at the largest number (no infinity);
+  "unbalanced range" at the underflow threshold. From ACK's C library: `sqrt` not
+  correctly rounded (-0.60 to +0.50 ulp), `pow(0,0)` gives 0 (should be 1), `printf`
+  `%.17e` prints only 16 digits. Usable (BBC BASIC etc.), but results can differ
+  from other machines in the last bit. Options: fix rounding/infinity in
+  `mach/proto/fp`, or use another soft-float (e.g. Berkeley SoftFloat) built for
+  16-bit `int`; fix `pow`, `sqrt`, `printf` precision in `lang/cem/libcc.ansi`.
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -190,10 +200,12 @@ In order of value:
   (≤ end of bss). Cases: an empty program, the examples, and the F2 case (pointers
   separated by large initialised arrays: before the fix `cv` aborted). Also a program
   whose size is just under 64 KB (F3, stack size).
-- [ ] **T10 — keep the float differential test.** The bit-exact float/double test
-  used for F1 (IEEE bits of arithmetic, conversions, libm, printf against host gcc) as
-  a T7-style check. Note: `examples/paranoia.c` is a text adventure, not Kahan's
-  IEEE test.
+- [ ] **T10 — float conformance tests.** Kahan's Paranoia (the C version by Sumner and
+  Gay; the user's copy is in `tmp/paranoia.c`, which is git-ignored) under the
+  emulator, compared with host gcc, plus the bit-exact float/double differential
+  test used for F1. To build with ACK, its own `extern int read(int, char*, int);`
+  (line 121) must go: it clashes with ACK's `unistd.h`. The acceptance test for F1b.
+  Note: `examples/paranoia.c` is a text adventure, not the IEEE test.
 - [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
   structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
   of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
