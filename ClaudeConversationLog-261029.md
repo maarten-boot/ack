@@ -235,3 +235,36 @@ User:
   identical (the archives differ only in their headers). The exception,
   `hilo_bas_minix68k.exe`, is not reproducible even with the same toolchain (two
   compiles differ in one byte of code): new task N8.
+
+### F1: software floating point
+
+User:
+> you can read the rosco firmware code at ../rosco_m68k (read only again)
+> yes apply and commit
+
+- Read only, `../rosco_m68k` (`ec229f9`): the firmware has no FPU support or
+  emulation; it only borrows the line F vector (`$2C`) while detecting the CPU type
+  (`code/firmware/rosco_m68k_firmware/stage1/cputype.asm`) and restores it. Under
+  Minix the kernel's own vectors apply anyway (line F → SIGFPE). So on the board
+  every ACK float operation killed the process.
+- Fix (`b7748391d`): `mach/proto/fp/build.py` builds ACK's software float package
+  again (the recipe was lost with the Lua build; the old one is
+  `git show 414bbe1e6^:mach/proto/fp/build.lua`): each routine compiled to `.s` for
+  the platform, `massage_s.lua` renames `_adf8` → `.adf8` etc. The routines plus
+  `fptrp.e` go into the m68k2 libem instead of `fp68881.s` (a 68000/68010 cannot
+  drive a 68881 through F-line instructions), so link lines (including the minix
+  port's `crtso emrts ... libc libem libend`) need no change. The ncg float patterns
+  call the helpers through EM's normal `cal`/`asp` convention with 2-byte size words,
+  which is what the C routines expect. Bit rot: `adder.c` returned `true` without
+  `<stdbool.h>`; now `1` (the function returns `int`).
+- Tests: minix68k with the `floats` set: 46/46 (fresh clone, plain `make`);
+  `mandelbrot.c` output identical to host gcc; a bit-exact differential test (IEEE
+  bits of float/double + - * /, overflow, denormal, all int/long/unsigned
+  conversions, comparisons, sin/exp/log/pow/floor/modf/ldexp/frexp, printf
+  %g/%e/%f) matches host gcc except `sqrt(2)`, 1 ulp (libm's algorithm, not the
+  arithmetic).
+- Side findings: `examples/paranoia.c` is the Paranoia text adventure, not the IEEE
+  test (it loops at its first choice when fed empty lines); F3 seen for real: `cv`
+  gave it an 866-byte stack. Also: build clones in the scratch area used all inodes
+  of `/tmp` ("No space left on device" with 4.5 GB free); removed, and clones are
+  now deleted after each check.

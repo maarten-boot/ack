@@ -7,14 +7,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 
 ## High
 
-- [ ] **F1 — float/double needs a 68881 FPU.** `mach/m68k2/libem/build.py:8` globs
-  every `.s`, including `fp68881.s`, so `.adf8`, `.mlf8`, `.cff8`, ... use FPU
-  instructions and trap (F-line) on a 68010 without FPU (`printf("%g")`, BBC BASIC).
-  The software float library `mach/proto/fp` lost its build recipe in `414bbe1e6`.
-  Fix: port `mach/proto/fp/build.lua` (`git show 414bbe1e6^:mach/proto/fp/build.lua`)
-  to `build.py` with `mach/m68k2/libfp/byte_order.h`, leave `fp68881.s` out for
-  minix68k, link `libfp.a` before `libem.a` in `plat/minix68k/descr`.
-  *Waiting for the decision from the minix2/bbcbasic projects.*
+- [x] **F1 — float/double needs a 68881 FPU** (fixed `b7748391d`). libem's float
+  helpers were 68881 code (`fp68881.s`); a 68000/68010 cannot use a 68881 through
+  F-line instructions, so every float operation trapped (on the board: SIGFPE; the
+  rosco firmware has no FPU support or emulation, and Minix installs its own
+  vectors). The software package `mach/proto/fp` is built again
+  (`mach/proto/fp/build.py`) and replaces `fp68881.s` in the m68k2 libem, so link
+  lines stay the same. minix68k runs the `floats` set (46/46 pass); a bit-exact
+  comparison with host gcc matches except `sqrt` (1 ulp, libm).
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -54,7 +54,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 
 - [ ] **F3 — default stack can be tiny.** `cv.c:60-95` (`minixhead()`) rounds
   text+data+bss up to the next 64 KB and gives the rest to the stack; just below a
-  64 KB boundary that is a few bytes. Fix: a minimum stack (e.g. 16 KB) or a `descr`
+  64 KB boundary that is a few bytes. Seen: `examples/paranoia.c` gets an 866-byte stack
+  (text+data+bss 64,670 bytes); the minix port works around it with `acc-minix -S`. Fix: a minimum stack (e.g. 16 KB) or a `descr`
   option passing chmem-style `+N` to `cv`.
 - [ ] **F4 — `plat/minix68k/descr` leftovers.** `:26-30` old Minix-ST paths
   (`SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `MACHOPT_F`); `:57` `-l*` maps to a non-existent
@@ -189,6 +190,10 @@ In order of value:
   (≤ end of bss). Cases: an empty program, the examples, and the F2 case (pointers
   separated by large initialised arrays: before the fix `cv` aborted). Also a program
   whose size is just under 64 KB (F3, stack size).
+- [ ] **T10 — keep the float differential test.** The bit-exact float/double test
+  used for F1 (IEEE bits of arithmetic, conversions, libm, printf against host gcc) as
+  a T7-style check. Note: `examples/paranoia.c` is a text adventure, not Kahan's
+  IEEE test.
 - [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
   structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
   of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
