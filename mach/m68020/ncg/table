@@ -5259,14 +5259,9 @@ pat loc ror ($1&32)!=0 && $2==8		leaving loc (0-$1)&31 rol 8
  * Group 10: sets				*
  ************************************************/
 
-#if WORD_SIZE==2
-pat inn $1==4
-with conreg2 DD_REG4
-    gen btst %1, %2.1
-	sne {dreg1, %2.1}
-	and_l {const4, 1}, %2
-			yields	%2.1
-#endif
+/* No inline "inn 4" for WORD_SIZE==2: btst on a long numbers the bits of
+ * the 32 bits, but EM puts bit n in word n/16 by address (as .set and
+ * .inn do), so bits 0-15 are in the word at the higher address. */
 
 pat inn $1==WORD_SIZE
 with conreg2 DD_REG
