@@ -15,13 +15,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   to `build.py` with `mach/m68k2/libfp/byte_order.h`, leave `fp68881.s` out for
   minix68k, link `libfp.a` before `libem.a` in `plat/minix68k/descr`.
   *Waiting for the decision from the minix2/bbcbasic projects.*
-- [ ] **F2 — heap overflow in `cv`'s relocation table.** `plat/minix68k/cv/cv.c:257`
-  allocates `4 * cnt` bytes, but gaps between relocations need an extra byte per 254
-  bytes (`:308`), and `*((long*)b) = curr` (`:303`) stores 8 bytes on a 64-bit host.
-  Reproduced: sparse pointers in large initialised data make `cv` abort
-  (`malloc(): corrupted top size`; ASan: heap-buffer-overflow at cv.c:310).
-  Fix: write the table straight to the output (`put1()`/`put4()`), drop `cvlong()`
-  (`:353`), check `write()`.
+- [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
+  `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
+  gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
+  stored 8 bytes on a 64-bit host: sparse pointers in large initialised data made `cv`
+  abort (`malloc(): corrupted top size`). Now the table is written through a small
+  buffer (`relo_put1()`/`relo_put4()`), `cvlong()` is gone, `write()` is checked, and
+  input the GEMDOS format cannot express (odd address, relocation at 0, duplicates)
+  is a `fatal()` instead of a silently broken table.
 
 ## Medium
 
@@ -96,6 +97,61 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   upstream", 2026-10-29) is authored by `Your Name <you@example.com>`: set
   `user.name`/`user.email` on the machine that made it. History is pushed, so leave
   the commit as it is.
+
+## Tests to add
+
+ACK has a test suite: `tests/plat` (about 60 small self-checking programs in sets
+`core`, `bugs`, `floats`, `long-long`, `m2`, using `tests/plat/lib/test.c`, which only
+needs `write()` and `_exit()`), run by `tests/plat/testdriver.sh` on a per-platform
+emulator (`plat/linux68k/emu`: Musashi plus ~400 lines of syscall shim). minix68k has
+no emulator and is not in `TEST_PLATS` (`build.py`), so **nothing is tested for it
+today** beyond "it compiles". `lang/basic/test` has 49 BASIC programs and 47 expected
+outputs (`*.b.g`), not wired into the build.
+
+In order of value:
+
+- [ ] **T1 — a minix68k emulator, `plat/minix68k/emu`** (the key piece; most other
+  tests run on it). Copy `plat/linux68k/emu` and change the loader and the syscalls:
+  - Musashi as **`M68K_CPU_TYPE_68010`** with address errors on (already `OPT_ON` in
+    `m68kconf.h`): 68020-only instructions, FPU instructions and odd word/long
+    accesses then fail the test instead of passing silently;
+  - load the `cv` output (32-byte Minix header, text, data, bss), at a load address
+    other than 0, and **apply the GEMDOS relocation table**: this tests `cv`
+    end to end;
+  - build the Minix-ST initial stack that `boot.s` expects (argc, argv and envp
+    vectors in place);
+  - `trap #0` with d0 = SEND/RECEIVE/BOTH, d1 = FS/MM, a0 = message (16-bit `int`
+    layout): EXIT, READ, WRITE, OPEN, CLOSE, LSEEK, BRK, GETPID, TIME, IOCTL.
+- [ ] **T2 — run `tests/plat` for minix68k** (`plat/minix68k/tests/build.py`, add
+  minix68k to `TEST_PLATS`): sets `core` and `bugs` first (the `.p`/`.mod` entries
+  need Pascal/Modula-2, so a C-only list); `floats` **fails today** (F1: 68881 code
+  on a 68010) and becomes the acceptance test for the soft-float work; `long-long` is
+  not supported by the minix68k descr (no `q` size).
+- [ ] **T3 — BASIC tests**: run `lang/basic/test/*.bas` under the emulator and compare
+  with `*.b.g` (feed the interactive ones a fixed stdin, or skip them); covers the
+  BASIC front end and runtime that bbcbasic-style work relies on.
+- [ ] **T4 — `cv` regression tests (host only, no emulator):** a small script that
+  links test programs and checks the output: header fields (32 bytes, sizes), the
+  relocation table decodes, ends with 0, every relocated long points into the image
+  (≤ end of bss). Cases: an empty program, the examples, and the F2 case (pointers
+  separated by large initialised arrays: before the fix `cv` aborted). Also a program
+  whose size is just under 64 KB (F3, stack size).
+- [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
+  structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
+  of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
+- [ ] **T6 — 68010 instruction check without an emulator**: assemble/compile the
+  runtime libraries and a set of C files to `.s` and fail on 68020/FPU mnemonics
+  (`extb`, `muls.l`, `divs.l`, bit-field ops, `rtd`, scaled index, `f*`) and on
+  `move sr,<ea>` (privileged on the 68010). Cheap; T1 catches the same at run time.
+- [ ] **T7 — differential tests**: compile the same portable C programs (examples,
+  `paranoia.c`, small integer/long/struct tests) with the host gcc and with ACK for
+  minix68k, run both (natively and in the emulator), compare outputs. Mind 16-bit
+  `int`: use `long` where values exceed 32767.
+- [ ] **T8 — sanitizer and clang jobs for the host tools**: build with
+  `-fsanitize=address,undefined` and run T2–T4 (would have caught F2); build with
+  clang (still Linux) to catch strict-aliasing UB like F11/N7 before it bites.
+- [ ] **T9 — CI**: run T2–T4 (and later T8) in `.github/workflows/ccpp.yml`; the
+  Linux job already builds everything, so the tests add little time.
 
 ## Checked, not a problem
 

@@ -52,4 +52,44 @@ Real issues (details and fixes in `Tasks.md`):
 
 Checked and harmless: listed at the end of `Tasks.md`.
 
-No source files were changed.
+The code check itself changed no source files.
+
+### F2 fixed: `cv` relocation table overflow
+
+User:
+> start with the cv overflow fix
+
+- `plat/minix68k/cv/cv.c`, `emit_relo()`: the table is no longer built in a buffer of
+  `4 * nrelo` bytes (too small when relocations are far apart: one extra byte per 254
+  bytes of gap; and `*((long*)b) = curr` stored 8 bytes on a 64-bit host). It is now
+  written through a 512-byte buffer with `relo_put1()`/`relo_put4()` (big-endian),
+  `cvlong()` is gone, and `write()` errors are fatal. Input the GEMDOS format cannot
+  express is now a `fatal()` instead of a silently wrong table: a relocation at an odd
+  address, a first relocation at address 0 (a start value of 0 means "none"), and
+  duplicates or out-of-order relocations (a 0 step byte would end the table early).
+  `calloc()` asks for at least one element so 0 relocations is not "No memory".
+- Tests (scratch clone, gcc, `ack -mminix68k -O -c.out` then `cv`):
+  - before: the F2 program (three pointers separated by two 30000-byte initialised
+    arrays) aborts with `malloc(): corrupted top size`;
+  - after: it converts (43 relocations, 236 skip bytes, 283 table bytes against the
+    old 4*43 = 172-byte buffer);
+  - 7 other programs (empty `main`, hello with pointer tables, `hilo.c`, `hilo.bas`,
+    `mandelbrot.c`, `paranoia.c`, `startrek.c`): output **byte-identical** to the old
+    `cv`;
+  - all 8 identical to the old algorithm compiled with a 64 KB larger buffer (so the
+    F2 output matches what the old code meant to write);
+  - the new `cv` under ASan + UBSan: no reports; the two `write()` warnings are gone;
+  - decoding the F2 table: every relocated long points into the image (three point at
+    exactly the end of bss: `.reghp`, `.limhp` in `boot.s` and one more end pointer).
+
+### Testing
+
+User:
+> while you are at it, suggest as many tests as needed to verify things work, not
+> sure if this software suite has a testing suite
+
+ACK has `tests/plat` (about 60 self-checking programs) run per platform on an
+emulator, but minix68k has no emulator and is not in `TEST_PLATS`, so nothing runs for
+it. `lang/basic/test` has 47 BASIC programs with expected output, unused. The plan is
+in `Tasks.md`, "Tests to add" (T1–T9); the key piece is a minix68k emulator modelled on
+`plat/linux68k/emu`, with Musashi in 68010 mode and address errors on.
