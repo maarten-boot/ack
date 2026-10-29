@@ -104,9 +104,12 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `langs` parameter for `build_plat_libs()` (`plat/build.py`), `langs=("c","basic")`
   in `plat/minix68k/build.py`, a `c_basic` export in `build.py`, minix68k examples
   without `.mod`/`.p` (`examples/build.py`).
-- [ ] **Linux release workflow for minix68k** (proposal in section 4 of
-  `ClaudeConversationLog-261023.md`): build, smoke test, tarball for `ACKDIR=` use,
-  release on `minix68k-*` tags.
+- [x] **Linux release workflow for minix68k** (written 2026-10-29; first run on
+  GitHub with the first `minix68k-*` tag): `.github/workflows/minix68k-release.yml`
+  builds, runs all tests, and packages with `plat/minix68k/mkrelease.sh` (tarball of
+  the staging tree plus `bin/minix68k-emu` and a README, smoke-tested from an
+  unpacked copy); a tag `minix68k-YYYYMMDD` makes a GitHub release, a manual run
+  only uploads the tarball as an artifact.
 - [x] **F11/N7 — strict-aliasing UB, also in the C front end** (`-fno-strict-aliasing` in `CFLAGS`, 2026-10-29).
   `lang/m2/comp/chk_expr.h:25-27` keep a set's refcount as `int` in an `arith` slot;
   clang `-Os` frees constant sets after their first use (proven, F11). The same class
@@ -221,8 +224,8 @@ In order of value:
 - [ ] **T8 — sanitizer and clang jobs for the host tools**: build with
   `-fsanitize=address,undefined` and run T2–T4 (would have caught F2); build with
   clang (still Linux) to catch strict-aliasing UB like F11/N7 before it bites.
-- [ ] **T9 — CI**: run T2–T4 (and later T8) in `.github/workflows/ccpp.yml`; the
-  Linux job already builds everything, so the tests add little time.
+- [x] **T9 — CI** (done: the Linux job runs plain `make`, which runs all 47
+  minix68k tests, about 70 s on GitHub).
 
 ## Checked, not a problem
 

@@ -334,3 +334,32 @@ User:
   output) with `MAX_FLAWS=1`, with another program (no normal end), and with a
   program that faults in the emulator. A fresh clone with plain `make` runs 47
   minix68k tests, all passing.
+
+### Release workflow
+
+User:
+> i pushed
+> yes start with the release workflow
+
+- CI on the push (`8c628f704`, run 40960211502): build-linux passed; plain `make` now
+  runs the 47 minix68k tests (about 70 s), so T9 is done.
+- `plat/minix68k/mkrelease.sh <name> [outdir]`: after `make`, packs `.obj/staging`
+  plus the emulator (`bin/minix68k-emu`) and a `README-minix68k.txt` (usage with
+  `ACKDIR`, the commit, how the Minix port links) as
+  `ack-minix68k-<name>-linux-x86_64.tar.gz` with a `.sha256`, then unpacks it
+  elsewhere, compiles a test program with only the unpacked tree and runs it in the
+  packaged emulator (arguments, a long, 16-bit int, soft-float sqrt).
+- `.github/workflows/minix68k-release.yml`: on a pushed `minix68k-*` tag (or by
+  hand): checkout, apt, `make` (all tests must pass), `mkrelease.sh`, upload the
+  tarball as an artifact; for a tag also a GitHub release. Actions pinned like the CI.
+- Tested locally (fresh clone, `make`, `mkrelease.sh 20261029-local`): 3.3 MB tarball,
+  189 entries, smoke test "hello rosco 70000 2 1414.214". The workflow itself first
+  runs on GitHub with the first tag; the YAML parses.
+- User: "use the latest gh actions you can find, many old ones use outdated js
+  components, and always pin to hash not to version." Re-checked: checkout v7.0.1,
+  upload-artifact v7.0.2 and action-gh-release v3.0.3 are the latest releases, all
+  `node24`. **Correction:** the action-gh-release pin `e598afbe…` (also used in the
+  release.yml of 2026-10-24, since deleted) was the annotated *tag object*, not a
+  commit (the lookup did not dereference `v3.0.3^{}`); now the commit `efb35369…`.
+  All three pins verified via the GitHub API as commits, with `using: node24` in
+  their `action.yml` at that commit.
