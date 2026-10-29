@@ -52,11 +52,12 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   signal number). Fix: let `.trp` raise a signal for unhandled traps, or let the
   BASIC runtime install an EM trap handler (`sig`); the emulator would need signal
   delivery to test it.
-- [ ] **B2 — ACK BASIC programs only run where they were compiled.** Every program
-  opens its DATA side file `<source>.bas.d` at start-up, by the name given at compile
-  time, even without DATA statements: `examples/hilo.bas` installed elsewhere stops
-  with "LINE 0:ERROR 28: File not found". Fix: open the file only when DATA is read,
-  or put DATA into the program (rom) instead of a side file.
+- [x] **B2 — ACK BASIC programs only run where they were compiled** (fixed
+  2026-10-30, all platforms). DATA is now in the program: the compiler collects the
+  DATA text in memory (`datprintf()`) and emits it as `_datatext` next to
+  `_seektab`; READ/RESTORE on channel 0 read it in `lang/basic/lib/read.c` with the
+  same rules as reading the file did. No `<source>.bas.d` file is written or opened
+  any more.
 - [ ] **B3 — BASIC input on a closed stdin recurses until the stack is gone.**
   `_readint`/`_readflt` (`lang/basic/lib/read.c`) retry with "?Redo" when reading
   fails without EOF; with fd 0 closed (as `util/build`'s testrunner does) a program

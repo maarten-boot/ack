@@ -54,3 +54,33 @@ User:
 - Checked: the harness fails (exit 1, a diff and `@@FAIL basic opg3`) with a wrong
   expected file (opg3.b.g and opg4.b.g are identical, so test01.b.g); a fresh clone
   with plain `make` runs 92 minix68k tests (47 + 45 BASIC), all passing.
+
+### B2: DATA in the program
+
+User:
+> start with B2, put DATA in the program
+
+- Before: the compiler wrote the DATA text to `<source>.bas.d` (one line per DATA
+  statement) and every program opened that file at start-up, by the name used at
+  compile time, as channel 0; READ read it with `fscanf`/`fgetc`, RESTORE n
+  `fseek`ed to the start and skipped lines (`_seektab`: BASIC line → line index).
+- Compiler (`lang/basic/src`): `datprintf()` collects the DATA text in a growing
+  buffer (`basic.g`'s eight `fprintf(datfile, …)` calls); `datatable()` emits it as
+  the rom string `_datatext` (always, empty without DATA) before `_seektab`;
+  `gendata()` (opening the file at start-up) and the data file name/`FILE`
+  (`datfname` in `bem.c`/`bem.h`/`initialize.c`, `datfile`, the unused
+  `sys_filesize()` offset in `datastmt()`) are gone.
+- Runtime (`lang/basic/lib`): `read.c` reads `_datatext` through `_datptr` when the
+  channel is 0 (`_datint`, `_datflt` with `strtol`/`strtod`, `_datstr` for quoted
+  and unquoted strings; skip white space, read, skip past the next `,` or newline;
+  nothing left: error 2 "Out of data"); `_restore` moves `_datptr` to the start or
+  past the DATA lines before the given line. `file.c`'s `_setchan(0)` no longer
+  points the channel at a FILE (it keeps output on stdout, so the next
+  `fflush(_chanwr)` is not `fflush(NULL)`).
+- Checked: a fresh clone with plain `make` runs all 92 minix68k tests (45 BASIC,
+  checker and test19 use RESTORE); the installed `hilo_bas_minix68k.exe` now runs in
+  any directory; compiling writes no `.bas.d`; a program reading mixed DATA (ints,
+  a negative, a float, a quoted string with a space, an unquoted word), RESTORE 20,
+  RESTORE and reading past the end prints exactly the same as the old side-file
+  build in its compile directory (byte-identical output, including "LINE 110:ERROR
+  2: Out of data").
