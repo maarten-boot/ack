@@ -26,7 +26,7 @@ static int extension_offset(void)
 
 void ea_1(int sz, int bits)
 {
-	int flag;
+	long flag;		/* see eamode[] in mach1.c */
 
 	if (mrg_1 > 074)
 		serror("no specials");
