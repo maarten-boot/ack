@@ -24,6 +24,7 @@
 1:
 	jmp	(a0)
 2:
+	move.l	a0,-(sp)	! .trp and the trap handler may change a0
 	move.w	#EHEAP,-(sp)
 	jsr	.trp
-	jmp	(a0)
+	rts

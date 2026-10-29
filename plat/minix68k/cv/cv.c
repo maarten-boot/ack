@@ -36,6 +36,8 @@ struct outsect outsect[S_MAX];
 #define LSECT  BSSSG + 1
 #define NSECT  LSECT + 1
 
+#define MIN_STACK 16384L /* default stack at least 16K (8k words) */
+
 static char* output_file;
 static int outputfile_created;
 
@@ -53,7 +55,6 @@ static long bsssize;
 static char* chmemstr;
 
 static long chmem(char* str, long old);
-static void cvlong(long* l);
 static void emit_relo(void);
 static void emits(struct outsect* section);
 
@@ -74,18 +75,28 @@ static void minixhead(void)
 		stack -= mh[2];
 	while (stack < 0)
 		stack += 0x00010000L;
+	/* The rest of the last 64K is the stack; just below a 64K boundary that
+	 * is only a few bytes, so give at least MIN_STACK (a chmem argument
+	 * still overrides). */
+	if (stack < MIN_STACK)
+		stack = MIN_STACK;
 	if (chmemstr)
 		stack = chmem(chmemstr, stack);
 	mh[6] = stack + (mh[3] + mh[4]);
 	if ((mh[0] & 0x00200000L) == 0) /* not SEPARATE */
 		mh[6] += mh[2];
 	mh[7] = 0;
+	/* 32 big endian bytes, whatever the size of a long on the host */
+	unsigned char hb[32];
 	for (i = 0; i < 8; i++)
 	{
-		cvlong(&mh[i]);
+		hb[4 * i] = mh[i] >> 24;
+		hb[4 * i + 1] = mh[i] >> 16;
+		hb[4 * i + 2] = mh[i] >> 8;
+		hb[4 * i + 3] = mh[i];
 	}
 
-	if (write(output, (char*)mh, sizeof(mh)) != sizeof(mh))
+	if (write(output, (char*)hb, sizeof(hb)) != sizeof(hb))
 		fatal("write error\n");
 }
 
@@ -238,6 +249,36 @@ static int compare(const void* pa, const void* pb)
 	return 0;
 }
 
+/*
+ * The relocation table is written through a small buffer, one byte at a
+ * time: its length depends on the distances between relocations (one extra
+ * byte per 254 bytes of gap), so it cannot be sized in advance.
+ */
+static unsigned char relobuf[512];
+static int relofill;
+
+static void relo_flush(void)
+{
+	if (relofill && write(output, relobuf, relofill) != relofill)
+		fatal("write error.\n");
+	relofill = 0;
+}
+
+static void relo_put1(int b)
+{
+	if (relofill == sizeof(relobuf))
+		relo_flush();
+	relobuf[relofill++] = b;
+}
+
+static void relo_put4(uint32_t l)
+{
+	relo_put1(l >> 24);
+	relo_put1(l >> 16);
+	relo_put1(l >> 8);
+	relo_put1(l);
+}
+
 static void emit_relo(void)
 {
 	struct outrelo* ACKrelo;
@@ -245,12 +286,10 @@ static void emit_relo(void)
 	unsigned int cnt = outhead.oh_nrelo;
 	long last, curr, base;
 	int sect;
-	char* bp;
-	char* b;
+	int first = 1;
 
-	ACKrelo = ap = (struct outrelo*)calloc(cnt, sizeof(struct outrelo));
-	bp = b = malloc(4 * cnt);
-	if (!ap || !bp)
+	ACKrelo = ap = (struct outrelo*)calloc(cnt ? cnt : 1, sizeof(struct outrelo));
+	if (!ap)
 	{
 		fatal("No memory.\n");
 	}
@@ -291,36 +330,39 @@ static void emit_relo(void)
 
 			assert(ap->or_type & RELO4);
 			curr = base + ap->or_addr;
-			if (last == 0)
+			if (curr & 1)
+				fatal("relocation at odd address 0x%lx\n", curr);
+			if (first)
 			{
-				last = curr;
-				cvlong(&curr);
-				*((long*)b) = curr;
-				b += 4;
+				/* L==0 would mean "no relocations" */
+				if (curr == 0)
+					fatal("relocation at address 0\n");
+				relo_put4(curr);
+				first = 0;
 			}
 			else
 			{
-				while (curr - last > 255)
+				/* B==0 would end the table */
+				if (curr <= last)
+					fatal("relocations out of order at 0x%lx\n", curr);
+				while (curr - last > 254)
 				{
-					*b++ = 1;
+					relo_put1(1);
 					last += 254;
 				}
-				*b++ = curr - last;
-				last = curr;
+				relo_put1(curr - last);
 			}
+			last = curr;
 		}
 		assert(cnt == 0 || ap->or_sect > sect);
 	}
 	assert(cnt == 0);
-	if (cnt = (b - bp))
-	{
-		*b++ = '\0';
-		write(output, bp, (int)cnt + 1);
-	}
+	if (first)
+		relo_put4(0); /* no relocations */
 	else
-		write(output, "\0\0\0", 4);
+		relo_put1(0); /* end of table */
+	relo_flush();
 	free((char*)ACKrelo);
-	free(bp);
 }
 
 static long chmem(char* str, long old)
@@ -343,17 +385,6 @@ static long chmem(char* str, long old)
 			break;
 	}
 	return (new);
-}
-
-static void cvlong(long* l)
-{
-	long x = *l;
-	char* p = (char*)l;
-
-	*p++ = x >> 24;
-	*p++ = x >> 16;
-	*p++ = x >> 8;
-	*p = x;
 }
 
 void rd_fatal(void)

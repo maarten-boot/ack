@@ -14,10 +14,10 @@
 	bcc	1f
 	cmp	#8,d0
 	bcc	4f
-	btst	d0,.trpim
+	btst	d0,.ignmask+1	! the word "sim" stores; bits 0-7 in the low byte
 	bra	5f
 4:
-	btst	d0,.trpim+1
+	btst	d0,.ignmask	! bits 8-15: the high byte (btst uses d0 mod 8)
 5:
 	bne	3f
 1:

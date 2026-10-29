@@ -54,26 +54,30 @@ extern int	curr_instr;
 #define	PUTW		0x40
 #define	PUTL		0x80
 
+/* long: (RELPC)<<8 needs more than 16 bits (an assembler built with 16-bit
+ * int lost RELPC, and relocated pc relative references, e.g. "jsr d16(pc)"
+ * to a function in the same section).
+ */
 #ifndef extern
-extern int	eamode[];
+extern long	eamode[];
 #else
-int	eamode[] = {
+long	eamode[] = {
 /* 00A */	DTA        |ALT,
 /* 01A */	            ALT,
 /* 02A */	DTA|MEM|CTR|ALT,
 /* 03A */	DTA|MEM    |ALT,
 /* 04A */	DTA|MEM    |ALT,
-/* 05A */	DTA|MEM|CTR|ALT|FITW|PUTW | (RELO2      )<<8,
-/* 06A */	DTA|MEM|CTR|ALT     |PUTW | (RELO1      )<<8,
+/* 05A */	DTA|MEM|CTR|ALT|FITW|PUTW | (long)(RELO2      )<<8,
+/* 06A */	DTA|MEM|CTR|ALT     |PUTW | (long)(RELO1      )<<8,
 /* 07x */	0,
-/* 070 */	DTA|MEM|CTR|ALT|FITW|PUTW | (RELO2      )<<8,
-/* 071 */	DTA|MEM|CTR|ALT     |PUTL | (RELO4      )<<8,
-/* 072 */	DTA|MEM|CTR    |FITW|PUTW | (RELO2|RELPC)<<8,
-/* 073 */	DTA|MEM|CTR         |PUTW | (RELO1|RELPC)<<8,
+/* 070 */	DTA|MEM|CTR|ALT|FITW|PUTW | (long)(RELO2      )<<8,
+/* 071 */	DTA|MEM|CTR|ALT     |PUTL | (long)(RELO4      )<<8,
+/* 072 */	DTA|MEM|CTR    |FITW|PUTW | (long)(RELO2|RELPC)<<8,
+/* 073 */	DTA|MEM|CTR         |PUTW | (long)(RELO1|RELPC)<<8,
 /* 074x */	0,
-/* 074B */	DTA|MEM        |FITB|PUTW | (RELO1      )<<8,
-/* 074W */	DTA|MEM        |FITW|PUTW | (RELO2      )<<8,
-/* 074L */	DTA|MEM             |PUTL | (RELO4      )<<8,
+/* 074B */	DTA|MEM        |FITB|PUTW | (long)(RELO1      )<<8,
+/* 074W */	DTA|MEM        |FITW|PUTW | (long)(RELO2      )<<8,
+/* 074L */	DTA|MEM             |PUTL | (long)(RELO4      )<<8,
 };
 #endif
 

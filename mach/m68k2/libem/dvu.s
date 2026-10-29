@@ -77,5 +77,8 @@
 	jmp	(a1)
 
 EIDIVZ	= 6
-9:	move.w	#EIDIVZ,-(sp)
+9:	move.l	a0,d3		! restore d3
+	move.l	a1,-(sp)	! return here after the trap; result undefined
+	move.w	#EIDIVZ,-(sp)
 	jsr	.trp
+	rts
