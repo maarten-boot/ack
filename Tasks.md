@@ -26,6 +26,15 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   from other machines in the last bit. Options: fix rounding/infinity in
   `mach/proto/fp`, or use another soft-float (e.g. Berkeley SoftFloat) built for
   16-bit `int`; fix `pow`, `sqrt`, `printf` precision in `lang/cem/libcc.ansi`.
+- [ ] **E5 — ego's `cs` phase crashes on minix68k code.** With
+  `EGO_PLAT_FLAGS=-M…/ego/m68k2.descr` (and `util/ego/descr/m68k2.descr` installed),
+  `-O3` and up run the `cs` and `ud` phases, which ego skips without a machine
+  description; `cs` then dies on `tests/plat/core/exg` with a NULL pointer:
+  `instrgroup(lnp=0x0)` at `util/ego/cs/cs_partit.c:718`, from `gains()`
+  (`util/ego/cs/cs_profit.c:178`) ← `desirable()` ← `eliminate()`
+  (`cs_elim.c:361`). Probably first exposure of `cs` to 2-byte words with 4-byte
+  pointers. Until fixed minix68k runs without the description (the whole suite
+  passes at `-O3` that way).
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -68,12 +77,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   64 KB boundary that is a few bytes. Seen: `examples/paranoia.c` gets an 866-byte stack
   (text+data+bss 64,670 bytes); the minix port works around it with `acc-minix -S`. Fix: a minimum stack (e.g. 16 KB) or a `descr`
   option passing chmem-style `+N` to `cv`.
-- [ ] **F4 — `plat/minix68k/descr` leftovers.** `:26-30` old Minix-ST paths
-  (`SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `MACHOPT_F`); `:57` `-l*` maps to a non-existent
-  `{EM}/{LIB}*` (so `-lm` cannot work; use `{PLATFORMDIR}/lib*`); `:59` `-fp` sets an
-  unused variable with an undefined `NLIB`; `:60` `-ansi` points to a missing file;
-  `:25` `CPP_F` lacks `-D__minix -D__m68k -D__mc68000 -D__mc68010`; no
-  `EGO_PLAT_FLAGS` and `util/ego/descr/m68k2.descr` is not installed.
+- [x] **F4 — `plat/minix68k/descr` leftovers** (fixed 2026-10-29). `-l<name>` now
+  maps to `{PLATFORMDIR}/lib<name>.a` (was the old Minix-ST `lib/minixST/tail_<name>`)
+  and `-lm` to `libc.a`, where the maths functions are; `-fp` is accepted and ignored
+  (floating point is always in software); `CPP_F` adds `-D__minix -D__m68k
+  -D__mc68000 -D__mc68010` (`_ATARI_ST` kept); the stale `NAME`, `M`, `MLIB`, `RT`,
+  `LIB`, `SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `-ansi` mapping and `{FLOATS?}` are
+  gone. Correction: `MACHOPT_F=-ml10` is not a leftover, it tunes `em_opt`
+  (multiplications by constants) and stays. `EGO_PLAT_FLAGS` is left out: see E5.
 - [ ] **F5 — minix68k and Minix-ST 2.0.4.**
   **Decision (2026-10-29): minix68k targets Minix-ST 2.0.4**, the system on the
   rosco_m68k board (not Minix 3: MMU, ELF, another message ABI, no 68k port).
@@ -156,6 +167,10 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
   to `unsigned char` in the class macros.
+- [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
+  linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
+  `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
+  if those platforms matter (upstream).
 - [ ] **N8 — BASIC compiles are not reproducible.** Compiling `examples/hilo.bas`
   twice with the same toolchain gives binaries that differ in one byte of code, an
   absolute address operand (0x0001C870 vs 0x0001B870): looks like uninitialised
