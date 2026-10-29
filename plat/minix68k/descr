@@ -1,4 +1,5 @@
-# $Revision$
+# Minix-ST on the rosco_m68k (68010): m68k2 code, 16-bit int, 32-bit long
+# and pointers, software floating point (in libem).
 var w=2
 var wa=2
 var p=4
@@ -17,16 +18,9 @@ var ARCH=m68k2
 var PLATFORM=minix68k
 var SHAREDIR={EM}/share/ack
 var PLATFORMDIR={SHAREDIR}/{PLATFORM}
-var NAME=minixST
-var M=m68k2
-var MLIB=lib/{M}/tail_
-var RT=lib/minixST/head_
-var LIB=lib/minixST/tail_
-var CPP_F=-D__unix -D_ATARI_ST
-var SYSINCLUDES=-I{EM}/lib/minixST/include -I{EM}/lib/minix/include
+# _ATARI_ST is kept for sources that still test it.
+var CPP_F=-D__unix -D__minix -D__m68k -D__mc68000 -D__mc68010 -D_ATARI_ST
 var ALIGN=-a0:4 -a1:4 -a2:4 -a3:4
-var C_LIB={EM}/{LIB}cc.1s {EM}/{LIB}cc.2g
-var OLD_C_LIB={C_LIB}
 var MACHOPT_F=-ml10
 
 # Override the setting in fe so that files compiled for this platform can see
@@ -54,10 +48,11 @@ name led
 	from .o.a
 	to .out
 	program {EM}/lib/ack/em_led
-	mapflag -l* LNAME={EM}/{LIB}*
-#	mapflag -i SEPID=-b1:0
-	mapflag -fp LIBFP={EM}/{NLIB}fp
-	mapflag -ansi C_LIB={EM}/{LIB}ac
+	# The maths functions are in libc.a: -lm links that.
+	mapflag -lm LNAME={PLATFORMDIR}/libc.a
+	mapflag -l* LNAME={PLATFORMDIR}/lib*.a
+	# Floating point is always in software (libem): accept -fp, ignore it.
+	mapflag -fp SOFTFP=yes
 	args {ALIGN} {SEPID?} -c \
 		({RTS}:.b=-u _i_main) \
 	    (.e:{HEAD}={PLATFORMDIR}/boot.o) \
@@ -72,7 +67,6 @@ name led
 		(.mod:{TAIL}={PLATFORMDIR}/libmodula2.a) \
 		(.ocm:{TAIL}={PLATFORMDIR}/liboccam.a) \
 		(.ocm.bas.mod.b.c.p:{TAIL}={PLATFORMDIR}/libc.a) \
-		{FLOATS?} \
 		(.e:{TAIL}={PLATFORMDIR}/libem.a \
 		           {PLATFORMDIR}/libsys.a \
 				   {PLATFORMDIR}/libem.a \
