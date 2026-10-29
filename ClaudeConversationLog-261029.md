@@ -93,3 +93,40 @@ emulator, but minix68k has no emulator and is not in `TEST_PLATS`, so nothing ru
 it. `lang/basic/test` has 47 BASIC programs with expected output, unused. The plan is
 in `Tasks.md`, "Tests to add" (T1–T9); the key piece is a minix68k emulator modelled on
 `plat/linux68k/emu`, with Musashi in 68010 mode and address errors on.
+
+### T1: the minix68k emulator, and what it found
+
+User:
+> start with the minix68k emulator
+> yes apply the fixes and commit
+
+- `plat/minix68k/emu/sim.c` (+ `build.py`, reusing the linux68k Musashi engine,
+  `sim.h` and `m68kconf.h`): a 68010 in user mode. Loads the `cv` output at 0x10000
+  and applies its GEMDOS relocation table; builds the stack `boot.s` expects; every
+  vector has its own stub: `trap #0` is a Minix sendrec (exit, read, write, open in
+  both message forms, creat, close, lseek, unlink, access, time, brk with MM's
+  1536-byte gap, getpid, signal, ioctl), any other exception is reported with the
+  disassembled user instruction and fails the run. User accesses below the program
+  (NULL) or beyond it, and writes into text, also fail. `-t` traces.
+  Musashi detail: setting SR does not swap the stack pointers, so the emulator
+  switches to user mode first and then sets a7 and the ISP.
+- `plat/minix68k/tests/build.py` (sets `core`, `bugs`) and minix68k in `TEST_PLATS`.
+- First run: 37 of 41 pass. The four failures, traced with `-t`:
+  - `rck` loops for ever: `.rck` kept its return address in a1 across `jsr .trp`;
+    and the ignored trap was still delivered: the code generator writes the ignore
+    mask to `.ignmask`, `.trp` read `.trpim`, bytes swapped (E1, E2; same return
+    address problem in `.strhp`, `.dvi`, `.dvu`);
+  - `inn`: the WORD_SIZE=2 inline rule for `inn 4` uses long bit order, against EM's
+    word order used by `.set`/`.inn` (E3), plus a test bug (`loe` of a 4-byte set);
+  - `aar`, `cii`: test bugs (pointer compare with `cmu EM_WSIZE`; little-endian double
+    word constants), and `ass` instead of `asp` after `fail()` misaligned the stack;
+  - details and fixes: `Tasks.md` E1-E4.
+- After the fixes: minix68k 41/41. The edited tests give the same results on the
+  other tested platforms (scratch build with `PLATS = minix68k linux68k pc86 cpm
+  linuxppc`): linux68k 47/47, pc86 47/47, cpm 47/47, linuxppc 52/52.
+- Emulator self-checks: an odd `long` store and a NULL read are reported (address
+  error / low memory), `mandelbrot.c` stops at its first 68881 instruction (F1), exit
+  codes pass through. A write to a `const` array is not caught because the C front
+  end puts it in `.data`, not `.rom`. `sim.c` is clean with `-Wall -Wextra`.
+- Commits: `4c255d142` (libem E1/E2), `b3124962c` (ncg E3), `1159d464e` (tests E4),
+  `dd125abc5` (emulator, tests).

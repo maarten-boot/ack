@@ -24,6 +24,32 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   input the GEMDOS format cannot express (odd address, relocation at 0, duplicates)
   is a `fatal()` instead of a silently broken table.
 
+- [x] **E1 — trap ignore mask never read** (fixed `4c255d142`) (found by the emulator, 2026-10-29). The code
+  generator compiles `sim`/`lim` to the word `.ignmask`, but
+  `mach/m68k2/libem/trp.s` tests `.trpim` (another variable in `boot.s`), and with the
+  two bytes swapped (`btst` on memory tests a byte; bits 0-7 are at +1 on the 68000).
+  Ignoring an EM trap can never work on minix68k. Fix: `btst d0,.ignmask+1` for
+  0-7, `btst d0,.ignmask` for 8-15. Verified: `tests/plat/core/rck` passes.
+- [x] **E2 — libem routines lose their return address when a trap returns** (fixed `4c255d142`).
+  `mach/m68k2/libem/rck.s` keeps it in a1 across `jsr .trp` (`.trp` and the handler
+  change a1: infinite loop, seen in `rck`); `shp.s` keeps it in a0 (same problem,
+  heap exhausted); `dvi.s`/`dvu.s` simply end after `jsr .trp` (divide by zero with an
+  ignored/caught trap runs into the next routine, d3/d4 not restored). Fix: push the
+  return address before `jsr .trp`, restore d3/d4, then `rts`.
+- [x] **E3 — `inn` on two-word sets uses the wrong bit order** (fixed `b3124962c`).
+  `mach/m68020/ncg/table` (`#if WORD_SIZE==2`, `pat inn $1==4`) tests the set as one
+  long (`btst bit,Dn`), but EM (and libem's `.set`/`.inn`) put bit n in word n/16 by
+  address: membership tests on sets of 17-32 elements disagree with how they were
+  built (Pascal/Modula-2). Fix: drop the inline rule; `inn 4` then calls `.inn`.
+  Verified: `tests/plat/core/inn` passes.
+- [x] **E4 — EM tests assume EM_WSIZE == EM_PSIZE or little-endian** (fixed `1159d464e`) (wrong only on
+  minix68k, the one platform with 2-byte words and 4-byte pointers, big-endian):
+  `aar` compares pointers with `cmu EM_WSIZE`; `cii` builds double words as
+  `loc 0; loc 1` (little-endian order; `ldc` is portable); `inn` loads a 4-byte set
+  with `loe`; `aar`, `inn`, `rck` (and others, harmless while tests pass) pass
+  `fail()` a 4-byte code or remove it with `ass` (pops the line number as an amount).
+  Fixes verified on minix68k and unchanged results on linux68k, pc86, cpm, linuxppc.
+
 ## Medium
 
 - [ ] **F3 — default stack can be tiny.** `cv.c:60-95` (`minixhead()`) rounds
@@ -110,8 +136,7 @@ outputs (`*.b.g`), not wired into the build.
 
 In order of value:
 
-- [ ] **T1 — a minix68k emulator, `plat/minix68k/emu`** (the key piece; most other
-  tests run on it). Copy `plat/linux68k/emu` and change the loader and the syscalls:
+- [x] **T1 — a minix68k emulator, `plat/minix68k/emu`** (done, `dd125abc5`). Copy `plat/linux68k/emu` and change the loader and the syscalls:
   - Musashi as **`M68K_CPU_TYPE_68010`** with address errors on (already `OPT_ON` in
     `m68kconf.h`): 68020-only instructions, FPU instructions and odd word/long
     accesses then fail the test instead of passing silently;
@@ -122,7 +147,8 @@ In order of value:
     vectors in place);
   - `trap #0` with d0 = SEND/RECEIVE/BOTH, d1 = FS/MM, a0 = message (16-bit `int`
     layout): EXIT, READ, WRITE, OPEN, CLOSE, LSEEK, BRK, GETPID, TIME, IOCTL.
-- [ ] **T2 — run `tests/plat` for minix68k** (`plat/minix68k/tests/build.py`, add
+- [x] **T2 — run `tests/plat` for minix68k** (done, `dd125abc5`: `core` and `bugs`,
+  41 tests, all pass) (`plat/minix68k/tests/build.py`, add
   minix68k to `TEST_PLATS`): sets `core` and `bugs` first (the `.p`/`.mod` entries
   need Pascal/Modula-2, so a C-only list); `floats` **fails today** (F1: 68881 code
   on a 68010) and becomes the acceptance test for the soft-float work; `long-long` is
