@@ -37,6 +37,8 @@
 #define NVECTORS    256
 #define LOAD_BASE   0x10000 /* where the program is loaded */
 
+#define CLICK_SIZE  256 /* Minix-ST memory unit */
+
 #define TRAP0_VECTOR 32
 #define SAFETY_BYTES 1536 /* MM's gap between break and stack */
 
@@ -561,6 +563,7 @@ static void load_program(const char* file)
 	data = (h[12] << 24) | (h[13] << 16) | (h[14] << 8) | h[15];
 	bss = (h[16] << 24) | (h[17] << 16) | (h[18] << 8) | h[19];
 	total = (h[24] << 24) | (h[25] << 16) | (h[26] << 8) | h[27];
+	total = (total + CLICK_SIZE - 1) & ~(CLICK_SIZE - 1); /* MM allocates clicks */
 	size = text + data;
 
 	if (total < size + bss || total > RAM_SIZE - LOAD_BASE)

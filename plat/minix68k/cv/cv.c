@@ -36,6 +36,8 @@ struct outsect outsect[S_MAX];
 #define LSECT  BSSSG + 1
 #define NSECT  LSECT + 1
 
+#define MIN_STACK 16384L /* default stack at least 16K (8k words) */
+
 static char* output_file;
 static int outputfile_created;
 
@@ -73,6 +75,11 @@ static void minixhead(void)
 		stack -= mh[2];
 	while (stack < 0)
 		stack += 0x00010000L;
+	/* The rest of the last 64K is the stack; just below a 64K boundary that
+	 * is only a few bytes, so give at least MIN_STACK (a chmem argument
+	 * still overrides). */
+	if (stack < MIN_STACK)
+		stack = MIN_STACK;
 	if (chmemstr)
 		stack = chmem(chmemstr, stack);
 	mh[6] = stack + (mh[3] + mh[4]);
