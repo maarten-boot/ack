@@ -6,9 +6,8 @@
 #	basic.sh <ack> <emulator> <prog.bas> <expected> <tstdir>
 #
 # ACKDIR must point at the ACK to use. The program is compiled and run in a
-# directory of its own: ACK BASIC keeps DATA in a side file (<prog>.bas.d)
-# that the program opens at run time, and some tests use the files in
-# lang/basic/test/tst. As with runcmp, the exit status of the program does
+# directory of its own, with a copy of lang/basic/test/tst, which some tests
+# read and write. As with runcmp, the exit status of the program does
 # not matter (some tests end with an error on purpose), only its output.
 # stdin is /dev/null (util/build's testrunner closes it, and a BASIC
 # program reading a closed stdin retries for ever); timeout is coreutils'.
