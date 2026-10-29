@@ -146,3 +146,68 @@ User:
 - **Decision: minix68k targets Minix-ST 2.0.4**, the board's system (not Minix 3:
   MMU, ELF, no 68k port). Recorded under F5 in `Tasks.md` with what has to change;
   waiting for the 2.0.4 facts from the minix2 project.
+
+### How the rosco Minix 2.0.4 port uses ACK (read-only look at ../minix-st-2.0.4)
+
+User:
+> i am not sure the minix2.0.4 links with the libsys from ack you can take a peek in
+> the ongoing porting of the minix2 to the rosco board (original from the atari st)
+> at ../minix2-st-2.0.4. DONT CHANGE THERE ANYTHING just read and summarize in your
+> own logs
+
+Read only (the directory is `../minix-st-2.0.4`, branch `rosco-m68k`, at `c17cc1a`);
+nothing was changed there.
+
+- **ACK used:** `src/rosco/ack/build-ack.sh` clones upstream `davidgiven/ack` at
+  `7afa32a0a` (2026-07-18, the same base as this fork) and applies
+  `ack-minix68k.patch`: `Makefile` (PLATS), `mach/m68020/ncg/mach.c` (`con_mult`),
+  `plat/minix68k/cv/cv.c` (32-byte header), `modules/src/system/maketempfile.c` — the
+  same changes as this fork's first commits — **plus `mach/m68k2/as/mach1.c` and
+  `mach5.c`**: `eamode[]` and `flag` made `long`, because `(RELO2|RELPC)<<8` does not
+  fit a 16-bit `int` when the assembler itself is built with gcc `-mshort` to run on
+  the board (it lost RELPC and relocated `jsr d16(pc)`; their Follow-up 42). That fix
+  is **not** in this fork.
+- **What programs link with** (host: `src/rosco/ack/acc-minix`; board: `cc.sh` as
+  `/usr/bin/cc`, files from `mkccproto.py`):
+  `crtso.o emrts.o <objects> libc.a libem.a libend.a`, where
+  - `crtso.o` is Minix's own `src/lib/m68000/rts/ncrtso.s` (defines `EXIT`, `.trpim`,
+    `.trppc`), compiled with ACK;
+  - `emrts.o` (`src/rosco/ack/lib/emrts.s`) supplies what ACK's `boot.s` normally
+    does for libem: `.lino`, `.filn`, `hol0`, `.reghp`, `.limhp`, **`.ignmask`**,
+    `BRK`, `WRITE`, the EM error numbers;
+  - `libc.a` is the **Minix 2.0.4 C library** (`src/lib`: ansi, posix, other, stdio,
+    syscall stubs, 68000 run-time) compiled with ACK (`src/rosco/ack/lib/Makefile`);
+  - only `libem.a` and `libend.a` come from ACK.
+  So **ACK's minix68k `libc.a`, `libsys.a`, `boot.o` and `c-ansi.o` are not used**
+  for the board; the final `ack -mminix68k -o` step gets only `.o`/`.a` inputs, so
+  the descr adds none of them, but ACK's `cv` still writes the executable.
+- **The 2.0.4 interface compared with ACK's minix68k (Minix 1.x) files:**
+  - messages: `short` fields unless `__MLONG__` (`include/minix/type.h`): with
+    ACK's 16-bit `int` the same layout as ACK's 1.x stubs and the emulator;
+  - call numbers: all 50 calls both tables have use the same numbers; 2.0.4 adds
+    `WAITPID` 11, `RDLNK` 49, `LSTAT` 50, `SYMLINK` 57, `SETSID` 62, `GETPGRP` 63,
+    `SIGACTION` 71 … `SIGRETURN` 75, `REBOOT` 76, `SVRCTL` 77 (`NCALLS` 78); only
+    1.x has `BRK2` 66 and `AM_SYSCALL` 69;
+  - `struct stat`: the same layout (`short st_nlink`, `short st_gid`);
+  - `termios.h` and `sys/sigcontext.h` exist in 2.0.4;
+  - executables: `include/a.out.h` uses the big-endian ST layout (cpu, flags,
+    magic `03 01`, ..., hdrlen 0x20) and MM (`src/mm/exec.c:263`) accepts `a_cpu`
+    `A_M68K` (0x0B) **or `A_I8086` (0x04)** on a 68000; `relocate()`
+    (`mm/exec.c:662`) reads the same GEMDOS table: **`cv`'s output is accepted as
+    is** (F5's header question is answered).
+- **Consequences:**
+  - The decision "minix68k targets Minix-ST 2.0.4" stands, but the board does not
+    need ACK's libsys ported: it already uses the 2.0.4 C library. What matters for
+    the board from this fork is the compiler, `libem`/`libend` and `cv`.
+  - Today's fixes reach the board only when the minix project builds this fork:
+    the `cv` overflow (F2) and the libem trap fixes (E1/E2; `.trp` now reads
+    `.ignmask`, which their `emrts.s` defines and the compiler writes). E3 (`inn`)
+    only matters for Pascal/Modula-2.
+  - F1 applies to the board as well: the 2.0.4 libc is built with ACK including the
+    float parts (`fphook/fltpr.o`, `strtod.o`), and ACK's `libem.a` implements float
+    operations with 68881 code, which traps on the 68010 (not checked here how the
+    rosco kernel handles line F).
+  - The emulator tests what is shared (compiler, libem, cv) through ACK's own 1.x
+    libc/libsys; to test the board's real combination it could later also run
+    programs linked like `acc-minix` does (Minix 2.0.4 libc), adding the 2.0.4-only
+    calls they use.
