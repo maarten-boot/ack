@@ -314,3 +314,23 @@ User:
     stack with only the header's total changed: `examples/paranoia.c` (1,778 bytes
     before) and `examples/startrek.c` (11,394 bytes before); both start in the
     emulator with their non-click totals (`hilo_bas` skipped, N8).
+
+### T10: Paranoia in the minix68k test suite
+
+User:
+> start with T10
+
+- `plat/minix68k/tests/build.py`: the existing suite is now `plat_tests`; new rules
+  build `paranoia.c` with ACK (a `sed` step drops its own
+  `extern int read(int, char*, int);`, which clashes with ACK's `<unistd.h>`, so the
+  stored copy stays unmodified) and run `paranoia.sh`; the `tests` target (what
+  `make` runs via `TEST_PLATS`) depends on both.
+- `plat/minix68k/tests/paranoia.sh`: runs the program in the emulator under the
+  test runner (60 s limit, stdin `/dev/null`; a run takes 0.25 s) and fails without
+  "Normal end of execution.", with any FAILURE, SERIOUS DEFECT or DEFECT, or with
+  more than `MAX_FLAWS` = 2 FLAWs (the known F1b flaws).
+- Checked: the generated source differs from the copy only by that line; the
+  checker passes the real run and fails (exit 1, with a one-line summary and the
+  output) with `MAX_FLAWS=1`, with another program (no normal end), and with a
+  program that faults in the emulator. A fresh clone with plain `make` runs 47
+  minix68k tests, all passing.

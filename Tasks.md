@@ -21,7 +21,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   sticky bit wrong; overflow saturates at the largest number (no infinity);
   "unbalanced range" at the underflow threshold. From ACK's C library: `sqrt` not
   correctly rounded (-0.60 to +0.50 ulp), `pow(0,0)` gives 0 (should be 1), `printf`
-  `%.17e` prints only 16 digits. Usable (BBC BASIC etc.), but results can differ
+  `%.17e` prints only 16 digits. Paranoia (T10) tolerates the 2 FLAWs via `MAX_FLAWS`
+  in `plat/minix68k/tests/paranoia.sh`. Usable (BBC BASIC etc.), but results can differ
   from other machines in the last bit. Options: fix rounding/infinity in
   `mach/proto/fp`, or use another soft-float (e.g. Berkeley SoftFloat) built for
   16-bit `int`; fix `pow`, `sqrt`, `printf` precision in `lang/cem/libcc.ansi`.
@@ -200,12 +201,12 @@ In order of value:
   (≤ end of bss). Cases: an empty program, the examples, and the F2 case (pointers
   separated by large initialised arrays: before the fix `cv` aborted). Also a program
   whose size is just under 64 KB (F3, stack size).
-- [ ] **T10 — float conformance tests.** Kahan's Paranoia (the C version by Sumner and
-  Gay; an unmodified copy is kept as `plat/minix68k/tests/paranoia.c`, not built yet) under the
-  emulator, compared with host gcc, plus the bit-exact float/double differential
-  test used for F1. To build with ACK, its own `extern int read(int, char*, int);`
-  (line 121) must go: it clashes with ACK's `unistd.h`. The acceptance test for F1b.
-  Note: `examples/paranoia.c` is a text adventure, not the IEEE test.
+- [x] **T10 — float conformance test** (done 2026-10-29). Kahan's Paranoia
+  (`plat/minix68k/tests/paranoia.c`, unmodified; its own `read()` declaration is
+  removed by `sed` at build time) runs in the emulator on every `make`;
+  `paranoia.sh` fails on no normal end, any FAILURE/SERIOUS DEFECT/DEFECT, or more
+  than `MAX_FLAWS` = 2 FLAWs (the known F1b flaws: lower it when F1b is fixed). Not
+  yet a test: the bit-exact float differential test used for F1.
 - [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
   structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
   of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
