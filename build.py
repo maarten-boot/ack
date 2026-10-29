@@ -20,6 +20,7 @@ TEST_PLATS = [
     "cpm",
     "linux68k",
     "linuxppc",
+    "minix68k",
     "pc86",
 ]
 
