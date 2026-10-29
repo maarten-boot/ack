@@ -62,10 +62,31 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   unused variable with an undefined `NLIB`; `:60` `-ansi` points to a missing file;
   `:25` `CPP_F` lacks `-D__minix -D__m68k -D__mc68000 -D__mc68010`; no
   `EGO_PLAT_FLAGS` and `util/ego/descr/m68k2.descr` is not installed.
-- [ ] **F5 — check the ABI against the rosco Minix 2 kernel.** `cv` writes the
-  Minix-ST header (`a_cpu` 0x04, ST field order), a GEMDOS relocation table, 16-bit
-  `int` message layouts, Minix 1.x syscall numbers (`plat/minix/include/minix/callnr.h`).
-  *Waiting for the minix2 project.*
+- [ ] **F5 — move minix68k from the Minix 1.x ABI to Minix-ST 2.0.4.**
+  **Decision (2026-10-29): minix68k targets Minix-ST 2.0.4**, the system on the
+  rosco_m68k board. Not Minix 3: it needs an MMU, uses ELF and another message ABI,
+  and never had a 68k port.
+  - Today ACK's minix68k is Minix 1.x (Minix-ST 1.5 era: V7 style, no MMU):
+    `plat/minix/include/minix/callnr.h` is the 1.x table (`NCALLS 70`,
+    `AM_SYSCALL 69`, nothing after `CHROOT 61`); the libsys stubs
+    (`plat/minix68k/libsys`) use the old `SIGNAL` call (48), `sgtty`/`TIOCGETP`
+    ioctls, no `termios`, and the old `stat` layout (`short st_nlink`). The headers
+    declare `sigaction`, `sigprocmask`, `waitpid` (`unistd.h`, `signal.h`,
+    `sys/wait.h`), but nothing implements them: such programs fail to link.
+    `descr` still says `NAME=minixST`, `config.h` `MACHINE ATARI`.
+  - To do, once the 2.0.4 facts are in (from the minix2 project: call numbers,
+    message layout with 16-bit `int`, `struct stat`, `termios` and its ioctls, signal
+    frame for `sigreturn`, a.out header and relocation the kernel loads):
+    `callnr.h` and the other headers; libsys stubs for `sigaction`, `sigprocmask`,
+    `sigsuspend`, `sigpending`, `sigreturn`, `waitpid`, `setsid`, `getpgrp`,
+    `tcgetattr`/`tcsetattr`; the `stat` layout; `cv`'s header if it differs
+    (`a_cpu` 0x04, ST field order today); then the same interface in
+    `plat/minix68k/emu` so the tests check what the board expects.
+  - Why it matters: simple stdio/file programs probably already run on 2.0.4 (its
+    call numbers are largely a superset of 1.x), but anything needing POSIX signals,
+    `waitpid`, `setsid` or `termios` (e.g. BBC BASIC's raw keyboard input and line
+    editing) does not work with the current libsys.
+  *Waiting for the 2.0.4 facts from the minix2 project.*
 - [ ] **C + BASIC build target** (decided 2026-10-23, not implemented):
   `langs` parameter for `build_plat_libs()` (`plat/build.py`), `langs=("c","basic")`
   in `plat/minix68k/build.py`, a `c_basic` export in `build.py`, minix68k examples

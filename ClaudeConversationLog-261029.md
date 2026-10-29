@@ -130,3 +130,19 @@ User:
   end puts it in `.data`, not `.rom`. `sim.c` is clean with `-Wall -Wextra`.
 - Commits: `4c255d142` (libem E1/E2), `b3124962c` (ncg E3), `1159d464e` (tests E4),
   `dd125abc5` (emulator, tests).
+
+### Which Minix does minix68k target?
+
+User:
+> one interesting question is currently what minix is actually emulating. Minix 1.x
+> was a V7 unix, Minix2 went to Posix but not yet MMU, and minx3 went all the way
+> with Posix and MMU.
+> yes, note it in Tasks.md as a decision
+
+- Found in this repository: ACK's minix68k is Minix 1.x (Minix-ST 1.5 era, V7 style,
+  no MMU): the 1.x call table, V7 `signal`/`sgtty` stubs, old `stat`; POSIX calls are
+  declared in headers but not implemented. The emulator follows exactly that process
+  interface (one process, flat memory, relocated load, 16-bit `int` messages).
+- **Decision: minix68k targets Minix-ST 2.0.4**, the board's system (not Minix 3:
+  MMU, ELF, no 68k port). Recorded under F5 in `Tasks.md` with what has to change;
+  waiting for the 2.0.4 facts from the minix2 project.
