@@ -84,3 +84,32 @@ User:
   RESTORE and reading past the end prints exactly the same as the old side-file
   build in its compile directory (byte-identical output, including "LINE 110:ERROR
   2: Out of data").
+
+### E5: ego's cs crash
+
+User:
+> i pushed (CI for `607be73b4` passed)
+> start with E5
+
+- Reproduced with the m68k2 description switched on (`util/ego/build.py`
+  `build_descr("m68k2")`, `EGO_PLAT_FLAGS` in `plat/minix68k/descr`): `em_ego -O3`
+  on `tests/plat/core/exg` crashes in `cs`.
+- gdb: `instrgroup(lnp=NULL)` from `gains()` (`util/ego/cs/cs_profit.c:178`);
+  `avp->av_instr` 4 (`adp`, an "addressing mode" in the description's `%%CS` list),
+  `avp->av_found` the first line of its basic block, so `l_prev` is NULL. `gains()`
+  asks whether the operand comes from a simple load; the `ads` case just above
+  checks `l_prev`, this one did not.
+- Fix: return "no gain" when there is no previous instruction (the operand comes
+  from before the block; nothing is eliminated). Only changes behaviour where `cs`
+  used to crash. minix68k now uses `m68k2.descr`.
+- Checked:
+  - the whole suite with all minix68k libraries and tests built at `-O3`: 92/92
+    (before the fix `cs` crashed);
+  - the normal build (`-O`): 92/92;
+  - against the normal libraries: `mandelbrot.c` and Kahan's Paranoia at `-O`,
+    `-O3`, `-O4`, `-O6` give identical output (Paranoia: 2 FLAWs at every level);
+    all 43 C and EM test programs of `tests/plat` (core, bugs, floats; the `,e,`
+    ones linked with `-.e` as the suite does) pass at `-O4` and `-O6`.
+- Found on the way, not caused by this: building ACK's own libraries at `-O4`
+  (`make ACKCFLAGS=-O4`) fails to link the examples ("Undefined: __II0, __II5",
+  ego inliner names), with or without the description: E6.

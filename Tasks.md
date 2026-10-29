@@ -26,15 +26,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   from other machines in the last bit. Options: fix rounding/infinity in
   `mach/proto/fp`, or use another soft-float (e.g. Berkeley SoftFloat) built for
   16-bit `int`; fix `pow`, `sqrt`, `printf` precision in `lang/cem/libcc.ansi`.
-- [ ] **E5 — ego's `cs` phase crashes on minix68k code.** With
-  `EGO_PLAT_FLAGS=-M…/ego/m68k2.descr` (and `util/ego/descr/m68k2.descr` installed),
-  `-O3` and up run the `cs` and `ud` phases, which ego skips without a machine
-  description; `cs` then dies on `tests/plat/core/exg` with a NULL pointer:
-  `instrgroup(lnp=0x0)` at `util/ego/cs/cs_partit.c:718`, from `gains()`
-  (`util/ego/cs/cs_profit.c:178`) ← `desirable()` ← `eliminate()`
-  (`cs_elim.c:361`). Probably first exposure of `cs` to 2-byte words with 4-byte
-  pointers. Until fixed minix68k runs without the description (the whole suite
-  passes at `-O3` that way).
+- [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
+  (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
+  expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;
+  when the expression is the first instruction of its basic block that is NULL
+  (seen: `adp 1` in `tests/plat/core/exg`). It is now not eliminated (its operand
+  comes from before the block). Latent for every platform; it showed on minix68k
+  because `cs` (and `ud`) only run with a machine description. minix68k now uses
+  `util/ego/descr/m68k2.descr` (`EGO_PLAT_FLAGS`, installed by `util/ego/build.py`).
 - [x] **L1 — `fflush()` on an input stream skipped forward** (fixed 2026-10-30, all
   platforms). `lang/cem/libcc.ansi/sys/stdio/fflush.c` gave back the unread buffered
   bytes with `lseek(fd, +count, SEEK_CUR)` instead of `-count` (since 1990,
@@ -195,6 +194,11 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
   to `unsigned char` in the class macros.
+- [ ] **E6 — ACK's own libraries cannot be built at `-O4`.** With `ACKCFLAGS=-O4`
+  (also without a machine description) the examples fail to link: "Undefined:
+  __II0, __II5" — names ego's inliner (IL) makes for local procedures, referenced
+  across library modules. The normal build uses `-O`; user programs at `-O4`/`-O6`
+  against the normal libraries are fine (see E5).
 - [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
