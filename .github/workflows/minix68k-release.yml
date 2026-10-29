@@ -1,0 +1,55 @@
+name: minix68k release
+
+# Build ACK for minix68k (rosco_m68k Minix-ST 2.0.4, 68010), run all tests
+# (make runs the minix68k suite in the emulator) and package it with
+# plat/minix68k/mkrelease.sh. A pushed minix68k-* tag (e.g. minix68k-20261029)
+# makes a GitHub release with the tarball; a manual run only uploads it as a
+# build artifact.
+
+on:
+  push:
+    tags:
+      - "minix68k-*"
+  workflow_dispatch:
+
+concurrency:
+  group: minix68k-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write # create the release
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+    - name: apt
+      run: sudo apt-get update && sudo apt-get install -y bison flex lua5.3 ninja-build
+
+    - name: build and test
+      run: make -j"$(nproc)"
+
+    - name: package
+      run: |
+        if [ "${{ github.ref_type }}" = tag ]; then
+          name="${GITHUB_REF_NAME#minix68k-}"
+        else
+          name="$(date -u +%Y%m%d)-${GITHUB_SHA::9}"
+        fi
+        mkdir -p dist
+        sh plat/minix68k/mkrelease.sh "$name" dist
+
+    - name: upload
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ack-minix68k
+        path: dist/*
+
+    - name: release
+      if: github.ref_type == 'tag'
+      uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+      with:
+        name: ACK for minix68k ${{ github.ref_name }}
+        files: dist/*
