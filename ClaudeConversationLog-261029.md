@@ -289,3 +289,7 @@ User:
 - Correction: the F1 entry above called the arithmetic "bit-exact" after a small
   differential test; that test only used cases that happen to round right.
   Paranoia's more thorough checks show the rounding is not IEEE-correct.
+- User: "if you want to stash a copy of the read paranoia.c for later tests feel
+  free." Kept unmodified as `plat/minix68k/tests/paranoia.c` (md5 9c105ddc…; its
+  terms: "You may copy this program freely if you acknowledge its source", header
+  kept). Not built yet (T10); ACK needs its line 121 `extern int read(...)` removed.

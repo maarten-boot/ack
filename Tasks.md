@@ -201,7 +201,7 @@ In order of value:
   separated by large initialised arrays: before the fix `cv` aborted). Also a program
   whose size is just under 64 KB (F3, stack size).
 - [ ] **T10 — float conformance tests.** Kahan's Paranoia (the C version by Sumner and
-  Gay; the user's copy is in `tmp/paranoia.c`, which is git-ignored) under the
+  Gay; an unmodified copy is kept as `plat/minix68k/tests/paranoia.c`, not built yet) under the
   emulator, compared with host gcc, plus the bit-exact float/double differential
   test used for F1. To build with ACK, its own `extern int read(int, char*, int);`
   (line 121) must go: it clashes with ACK's `unistd.h`. The acceptance test for F1b.
