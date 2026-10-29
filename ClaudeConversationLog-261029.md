@@ -293,3 +293,24 @@ User:
   free." Kept unmodified as `plat/minix68k/tests/paranoia.c` (md5 9c105ddc…; its
   terms: "You may copy this program freely if you acknowledge its source", header
   kept). Not built yet (T10); ACK needs its line 121 `extern int read(...)` removed.
+
+### F3 and N7
+
+User:
+> yes start with F3 and N7, 16 KB is fine
+
+- F3, `plat/minix68k/cv/cv.c` `minixhead()`: the default stack is still the rest of
+  the last 64 KB block, but at least `MIN_STACK` = 16 KB (8k words, the minimum the
+  minix port gives its commands); a chmem argument to `cv` still overrides it. The
+  total is then no longer a multiple of 64 KB, so `plat/minix68k/emu` rounds it up
+  to a 256-byte click as MM does (otherwise the initial sp could be odd).
+- N7, `Makefile`: `-fno-strict-aliasing` in `CFLAGS`, so gcc can never exploit the
+  type-punning in `modules/src/alloc/alloc.h` (C front end) or
+  `lang/m2/comp/chk_expr.h` (F11).
+- Verified with three clean builds (plain `make`, all 46 minix68k tests pass in each):
+  - baseline vs N7 only: all 104 minix68k programs and objects and all 521 archive
+    members byte-identical (the flag reaches 545 compile commands);
+  - N7 vs N7+F3: 51 programs unchanged (stack already >= 16 KB); two get a 16 KB
+    stack with only the header's total changed: `examples/paranoia.c` (1,778 bytes
+    before) and `examples/startrek.c` (11,394 bytes before); both start in the
+    emulator with their non-click totals (`hilo_bas` skipped, N8).

@@ -62,7 +62,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 
 ## Medium
 
-- [ ] **F3 — default stack can be tiny.** `cv.c:60-95` (`minixhead()`) rounds
+- [x] **F3 — default stack can be tiny** (fixed 2026-10-29: at least 16 KB). `cv.c:60-95` (`minixhead()`) rounds
   text+data+bss up to the next 64 KB and gives the rest to the stack; just below a
   64 KB boundary that is a few bytes. Seen: `examples/paranoia.c` gets an 866-byte stack
   (text+data+bss 64,670 bytes); the minix port works around it with `acc-minix -S`. Fix: a minimum stack (e.g. 16 KB) or a `descr`
@@ -106,7 +106,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 - [ ] **Linux release workflow for minix68k** (proposal in section 4 of
   `ClaudeConversationLog-261023.md`): build, smoke test, tarball for `ACKDIR=` use,
   release on `minix68k-*` tags.
-- [ ] **F11/N7 — strict-aliasing UB, also in the C front end.**
+- [x] **F11/N7 — strict-aliasing UB, also in the C front end** (`-fno-strict-aliasing` in `CFLAGS`, 2026-10-29).
   `lang/m2/comp/chk_expr.h:25-27` keep a set's refcount as `int` in an `arith` slot;
   clang `-Os` frees constant sets after their first use (proven, F11). The same class
   is in `modules/src/alloc/alloc.h:27` (`_A_st_free`, type-punned free-list head), used
