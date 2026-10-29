@@ -35,6 +35,32 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   (`cs_elim.c:361`). Probably first exposure of `cs` to 2-byte words with 4-byte
   pointers. Until fixed minix68k runs without the description (the whole suite
   passes at `-O3` that way).
+- [x] **L1 — `fflush()` on an input stream skipped forward** (fixed 2026-10-30, all
+  platforms). `lang/cem/libcc.ansi/sys/stdio/fflush.c` gave back the unread buffered
+  bytes with `lseek(fd, +count, SEEK_CUR)` instead of `-count` (since 1990,
+  `d87444a7f`, when the `fseek()` call was inlined). The BASIC runtime flushes before
+  every READ, so every second DATA line was lost ("Out of data").
+- [x] **L2 — BASIC `^` swapped its operands** (fixed 2026-10-30, all platforms).
+  The compiler pushes the base first, so the exponent is `_power()`'s first
+  parameter; the 1985 runtime computed `exp(first * log(second))`, the 2013 rewrite
+  (`d5f010774`) `pow(first, second)`: `n ^ .5` gave `.5 ^ n`.
+- [ ] **B1 — BASIC cannot catch arithmetic errors on minix68k.** The BASIC runtime
+  (`lang/basic/lib/trap.c`) catches errors with Unix signals (`signal(i, _trpfatal)`);
+  a division by zero on minix68k is an EM trap (7, EFDIVZ, from the soft-float code)
+  that `libem`'s `.trp` prints and exits on, it never becomes SIGFPE. So `ON ERROR`
+  does not see it (lang/basic/test test17/test18, which also expect "trap 8", the
+  signal number). Fix: let `.trp` raise a signal for unhandled traps, or let the
+  BASIC runtime install an EM trap handler (`sig`); the emulator would need signal
+  delivery to test it.
+- [ ] **B2 — ACK BASIC programs only run where they were compiled.** Every program
+  opens its DATA side file `<source>.bas.d` at start-up, by the name given at compile
+  time, even without DATA statements: `examples/hilo.bas` installed elsewhere stops
+  with "LINE 0:ERROR 28: File not found". Fix: open the file only when DATA is read,
+  or put DATA into the program (rom) instead of a side file.
+- [ ] **B3 — BASIC input on a closed stdin recurses until the stack is gone.**
+  `_readint`/`_readflt` (`lang/basic/lib/read.c`) retry with "?Redo" when reading
+  fails without EOF; with fd 0 closed (as `util/build`'s testrunner does) a program
+  that reads input crashes. Low: normal use always has a stdin.
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -172,11 +198,10 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
   if those platforms matter (upstream).
-- [ ] **N8 — BASIC compiles are not reproducible.** Compiling `examples/hilo.bas`
-  twice with the same toolchain gives binaries that differ in one byte of code, an
-  absolute address operand (0x0001C870 vs 0x0001B870): looks like uninitialised
-  memory in the BASIC front end (`lang/basic/src`, `em_bem`). Matters for T3 (BASIC
-  tests) and for comparing builds. Check with valgrind/ASan on `em_bem`.
+- [x] **N8 — BASIC compiles are not reproducible** (fixed 2026-10-30).
+  `lang/basic/src/gencode.c` emitted the length of the DATA file name as
+  `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Now
+  `strlen()`. All 49 BASIC test programs compile reproducibly.
 - [ ] **N6 — merge commit with a placeholder identity.** `c50619962` ("sync from
   upstream", 2026-10-29) is authored by `Your Name <you@example.com>`: set
   `user.name`/`user.email` on the machine that made it. History is pushed, so leave
@@ -211,9 +236,11 @@ In order of value:
   need Pascal/Modula-2, so a C-only list); `floats` **fails today** (F1: 68881 code
   on a 68010) and becomes the acceptance test for the soft-float work; `long-long` is
   not supported by the minix68k descr (no `q` size).
-- [ ] **T3 — BASIC tests**: run `lang/basic/test/*.bas` under the emulator and compare
-  with `*.b.g` (feed the interactive ones a fixed stdin, or skip them); covers the
-  BASIC front end and runtime that bbcbasic-style work relies on.
+- [x] **T3 — BASIC tests** (done 2026-10-30): 45 of the 47 programs with expected
+  output run in the emulator on every `make` (`plat/minix68k/tests/basic.sh`, compiled
+  and run in a directory of their own with `lang/basic/test/tst`, stdin `/dev/null`).
+  test26 has a 16-bit expected output (`plat/minix68k/tests/basic/test26.b.g`);
+  test17/test18 are skipped (B1). Found and fixed on the way: L1, L2.
 - [ ] **T4 — `cv` regression tests (host only, no emulator):** a small script that
   links test programs and checks the output: header fields (32 bytes, sizes), the
   relocation table decodes, ends with 0, every relocated long points into the image
