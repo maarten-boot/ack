@@ -1,5 +1,6 @@
 from build.ab import export, simplerule
 from build.ack import ackcprogram
+from build.c import hostcprogram
 from build.utils import test
 from glob import glob
 from os.path import basename
@@ -41,6 +42,28 @@ test(
         ".+paranoia",
     ],
     commands=["sh $[ins[0]] $[ins[1]] $[ins[3]] $[ins[2]]"],
+)
+
+# The software floating point against the host's IEEE arithmetic: fpgen
+# (host) writes test cases, fpcheck recomputes them in the emulator.
+hostcprogram(
+    name="fpgen",
+    srcs=["./fpgen.c"],
+    ldflags=["-lm"],
+)
+
+ackcprogram(
+    name="fpcheck",
+    srcs=["./fpcheck.c"],
+    lang="c",
+    plat="minix68k",
+    cflags=["-O"],
+)
+
+test(
+    name="fp_test",
+    ins=["./fpcheck.sh", "plat/minix68k/emu", ".+fpgen", ".+fpcheck"],
+    commands=["sh $[ins[0]] $[ins[1]] $[ins[2]] $[ins[3]]"],
 )
 
 # The BASIC test programs (lang/basic/test) with their expected output.
@@ -102,5 +125,6 @@ test(
 
 export(
     name="tests",
-    deps=[".+plat_tests", ".+paranoia_test", ".+cv_test"] + basic_tests,
+    deps=[".+plat_tests", ".+paranoia_test", ".+fp_test", ".+cv_test"]
+    + basic_tests,
 )
