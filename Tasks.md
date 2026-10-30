@@ -204,9 +204,10 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 - [x] **F6 — `plat/minix68k/boot.s`** (comments fixed 2026-10-29; code unchanged) comes from the "Bleasdale" port (`:13`, `:30`);
   `clr.l -4(a0)` (`:34`) relies on the Minix-ST stack layout; `add #010,sp` (`:55`)
   does not match what was pushed. Comment and test on rosco.
-- [ ] **F7 — `modules/src/system/maketempfile.c`**: the `__minix` branch never
-  triggers with this ACK (see F4 `CPP_F`); with 16-bit `unsigned` the `temper()`
-  shifts (`x>>18`) are undefined. Use `unsigned long` under `__minix`.
+- [x] **F7 — `modules/src/system/maketempfile.c`** (fixed 2026-10-30): the `__minix`
+  branch (reached since F4 added `-D__minix`) used 16-bit `unsigned` in `temper()`
+  (`x>>18` undefined, 15-bit names). Now `unsigned long` under `WIN32 || __minix`,
+  helper renamed `next_random()`, names printed with `%lx`.
 - [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob remains): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
   16 KB buffer per chunk; `chmem()` (`:333`) can return an uninitialised `new`.
   `plat/minix68k/libsys/build.py:11-13` globs `plat/minix/libsys`, which does not exist.

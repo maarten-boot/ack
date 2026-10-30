@@ -194,3 +194,24 @@ User:
   builds of everything (libraries, examples, tests) at `-O4` and `-O6`: all 92
   minix68k tests pass; the normal build is byte-identical before and after (107
   programs/objects, 521 archive members).
+
+### Small leftovers, 3: F7, `sys_maketempfile()` with 16-bit `int`
+
+User:
+> you can commit (E6: `76abdb282`, `32d145a67`)
+> you can continue
+
+- The `__minix` branch of `modules/src/system/maketempfile.c` is now reached (F4 added
+  `-D__minix` to `CPP_F`). Its private `rand_r()`/`temper()` used `unsigned`, 16 bits
+  on Minix-ST: `x>>18` is undefined, the `0x9D2C5680` masks are lost, and the hash
+  passed to `%x` is at most 15 bits.
+- Fixed: under `WIN32 || __minix` the seed and `temper()` are `unsigned long`
+  (`seed_t`); the helper is renamed `next_random()` (a Minix libc that declares
+  `rand_r()` would clash, as glibc does with `-D__minix` on the host); on other
+  systems `next_random()` wraps the real `rand_r()`. The hash is `unsigned long`,
+  printed with `%lx`.
+- Checked: host gcc `-Wall -Wextra` with and without `-D__minix`; full build of a
+  fresh clone, all tests pass; a test program built with `ack -mminix68k` and run in
+  the emulator (`int=2 long=4`) gives `ack.tst-797c7f8d.dat`, `-61755400`, `-76a9c7ba`
+  (old code: `-3933`, `-735`, `-338e`); with the file kept, `O_EXCL` moves on to a
+  new name.
