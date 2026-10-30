@@ -58,7 +58,10 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `-Vm56` for pdpv7), `flt_str2flt` divides by exact powers of ten. Step 3
   done: `tests/plat/floats/constfold,e,.c`, minix68k `fold_test`. Limitation: a literal of more than 19 significant digits that is
   exactly a tie is judged on its first 19 digits. Later: `float_cst()` rounds half-up, not to
-  even; `lang/m2/comp/cstoper.c` folds the same way.
+  even. Modula-2 folding: investigated 2026-10-30, not planned (Modula-2 is not
+  a goal for Minix 2); m2 folds as exact values rounded once where used, 25 of
+  8,859 probed constants 1 ulp off. Possible fix and the m2 output problems on
+  minix68k: see the log, "Modula-2 constant folding".
 - [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
   (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
   expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;

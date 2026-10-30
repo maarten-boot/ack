@@ -1044,3 +1044,51 @@ User:
 - User pushed and opened the PR: `upstream/volatile-nop` at c1042edd0 is
   davidgiven/ack#382, "powerpc and mcg: accept the nop emitted after a volatile
   access". Open upstream PRs from the fork now: #375-#382.
+
+### F1d follow-up: Modula-2 constant folding (investigation)
+
+- User: "start with the m2 folding". Path in the m2 front end: literal ->
+  `flt_str2flt` (LLlex.c) with its text kept in `r_real`; folded with
+  `flt_add/sub/mul/div` in `cstfbin` (cstoper.c), which drops the text; emitted
+  in code.c as `C_rom_fcon(text or flt_flt2str(18 digits), tp->tp_size)`, so the
+  back end's `float_cst` rounds it to the type of the place where it is used.
+- Semantics differ from C: a plain literal `0.1` has type REAL, `0.1D` LONGREAL,
+  and a REAL constant is assignment compatible with LONGREAL (`TstAssCompat`);
+  `MkCoercion` REAL->LONGREAL only changes the type. `x := 0.1` with x LONGREAL
+  gets the double 0.1, because the literal text is emitted at 8 bytes. So
+  literals must not be rounded to REAL as cemcom.ansi now rounds `0.1f`: m2
+  constants behave as untyped, exact values rounded once where used.
+- Probe (scratch `m2probe.py`, minix68k, -O): 300 random pairs per seed (1-3),
+  literals and folded + - * / as LONGREAL (D literals) and REAL, compared with
+  IEEE (operands rounded first, run-time result) and with the exact result
+  rounded once. Literals: 0 wrong. Folded vs IEEE: d+ 8-11%, d- 14-17%,
+  d* 20-23%, d/ 19-25%, f+ 7-10%, f- 14-16%, f* 36-41%, f/ 31-35%. Folded vs
+  exact: 0-4 per 300 per kind (d- 1, d* 6, d/ 8, d+ 1, f* 5, f/ 4 over the
+  three seeds), all 1 ulp; most of them have subnormal results or large
+  quotients. So m2 already folds "exact, rounded once"; the remaining errors
+  come from the 64-bit value going through 18 decimal digits and `float_cst`'s
+  half-up rounding instead of being rounded to the type directly.
+- Found on the way (minix68k, separate from folding): `InOut.WriteString/
+  WriteHex/WriteLn` print nothing, even with `CloseOutput`; `Terminal.Write(ch)`
+  writes 3 bytes per character (`c c \0`), `Terminal.WriteString` is right.
+  CARDINAL is 16 bits there.
+- User: "dont bother currently investigating modula2 it is not planned for
+  minix2, just make a note in the logs what we investigated and what could fix
+  it". Stopped here; no source changes. Notes for later:
+  - Possible fix for the 1-ulp errors: when code.c emits a folded constant
+    (`nd_RSTR` is NULL), round a copy of `nd_RVAL` with `flt_rnd()` to the size
+    of the place of use (4 bytes: 24 bits, emin -126; 8 bytes: 53 bits, emin
+    -1022) before `flt_flt2str`, so the back end gets a value that is already
+    rounded. Literals keep their text, so `x := 0.1` stays the double 0.1. Do
+    not round literals to REAL at lexing (m2 constants act as untyped). For
+    non-IEEE targets a `-Vm<n>` option as in cemcom.ansi (pdpv7 would set
+    `M2_ALIGN`, if it builds Modula-2). Test: a `.mod` in the floats set with the
+    probe's wrong cases checked against exact bit patterns. Upstream only after
+    PR #381 (needs `flt_rnd`).
+  - The probe's wrong cases (seeds 1-3) included `593.436D / 344.881D` (got
+    3ffb87fa7bbc0583, exact 3ffb87fa7bbc0584) and `2.50616704403109685E-22 *
+    4.52675054489872114E-24` (got 0, exact the smallest float subnormal).
+  - m2 output on minix68k: `InOut` prints nothing (also with `CloseOutput`),
+    `Terminal.Write(ch)` writes 3 bytes per character (`c c \0`). Not looked
+    into; would matter only if Modula-2 is used on the target.
+  - Scratch probe `m2probe.py` / `m2cmp.py` not kept in the repo.
