@@ -271,3 +271,19 @@ User:
   `PSIZE+WSIZE`. Tried in the scratch clone only (no go-ahead yet): `C_loc(0)`
   before `env` and `asp` 2 pointers + 1 int; `ERROR 5`, INPUT and LINE INPUT at the
   end and with stdin closed all print "caught <n>"; full build, all tests pass.
+
+### Small leftovers, 5b: B4 applied, with a test
+
+User:
+> yes commit B3, then apply B4 with the test
+
+- B3 committed (`78ab6e78d`, `b23b5389f`).
+- `lang/basic/src/gencode.c`, `prolog2()`: `C_loc(0)` (savemask) between the return
+  address and `env`; `asp` BEMPTRSIZE + BEMINTSIZE + BEMPTRSIZE.
+- Test `basic_onerror_test`: `plat/minix68k/tests/basic/onerror.bas` (ON ERROR GOTO
+  100, LINE INPUT at the end of stdin, the handler prints `err`/`erl` and raises
+  error 5, which ends the program) and `onerror.b.g`. `tests/build.py` takes our own
+  BASIC tests from `BASIC_OWN` next to `lang/basic/test`.
+- Checked (scratch clone): full build, all tests pass. The test fails with the old
+  `gencode.c` (emulator address error after "ERROR 2") and with the old `read.c`
+  (address error during the LINE INPUT recursion).

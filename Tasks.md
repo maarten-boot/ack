@@ -65,16 +65,15 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   never stopped (emulator: "write into text" or endless "?Redo"). Now the terminal
   gives errors 2/29 like INPUT; files keep error 40 (test28 expects it; its channel
   is opened "ab", so 29 would be more accurate).
-- [ ] **B4 — BASIC `ON ERROR GOTO` jumps to a garbage address** (all platforms;
-  found 2026-10-30 with B3, fix tried in a scratch clone only). The program prologue
-  (`lang/basic/src/gencode.c`, `prolog2()`) calls libc's `__setjmp(env, savemask)`
-  with the caller's return address pushed first, as the C front end does
-  (`cemcom.ansi/eval.c`), but without the `savemask` word: `__setjmp` reads the
-  return address from `PSIZE+WSIZE`, a misaligned half of the label plus stack
-  garbage, and `longjmp` from `_trap()` lands there (emulator: address error at
-  0x9c0001). Fix: `C_loc(0)` before `env`, `asp` 2 pointers + 1 int. Tried: `ERROR 5`,
-  INPUT and LINE INPUT at the end of stdin and with stdin closed all reach the
-  handler; all tests pass. Only test18 uses ON ERROR (skipped, B1).
+- [x] **B4 — BASIC `ON ERROR GOTO` jumped to a garbage address** (fixed 2026-10-30,
+  all platforms). The program prologue (`lang/basic/src/gencode.c`, `prolog2()`)
+  called libc's `__setjmp(env, savemask)` with the caller's return address pushed
+  first, as the C front end does (`cemcom.ansi/eval.c`), but without the `savemask`
+  word: `__setjmp` read the return address from `PSIZE+WSIZE`, and `longjmp` from
+  `_trap()` landed on garbage (emulator: address error). Now `C_loc(0)` is pushed
+  and `asp` removes 2 pointers + 1 int. Test: `plat/minix68k/tests/basic/onerror.bas`
+  (LINE INPUT at the end of stdin caught by ON ERROR, then an error in the
+  handler); it fails without B3 or B4.
 - [x] **S1 — `em_opt` read past `em_flag[]`** (fixed 2026-10-30, all platforms).
   `util/opt/putline.c` looked up pseudo-instructions (e.g. a `mes` without operands)
   in `em_flag[]`, which only covers instructions: ASan "global-buffer-overflow, 25
