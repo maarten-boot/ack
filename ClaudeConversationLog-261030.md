@@ -508,7 +508,11 @@ User:
   and contain no fork-only files.
 - Full upstream builds (`PLATS = all` and upstream's tests): the first attempt of
   the baseline and the combined build in parallel ran out of `/tmp` inodes; rerun
-  one after the other (result below when done).
+  one after the other: the baseline alone used all 1,048,576 inodes, so a full
+  `PLATS = all` build does not fit in this `/tmp`. Checked instead with the
+  platforms upstream tests (`PLATS = cpm linux68k linuxppc pc86` in the clone's
+  Makefile): plain `default` and `default` with all five branches merged both pass
+  all 193 tests (200 s / 202 s, about 517,000 inodes each).
 - PR texts (for the user to open the PRs):
 
 #### Upstream PRs (davidgiven/ack, base `default`)
