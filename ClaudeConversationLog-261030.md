@@ -215,3 +215,29 @@ User:
   the emulator (`int=2 long=4`) gives `ack.tst-797c7f8d.dat`, `-61755400`, `-76a9c7ba`
   (old code: `-3933`, `-735`, `-338e`); with the file kept, `O_EXCL` moves on to a
   new name.
+
+### Small leftovers, 4: T4, `cv` checked without the emulator
+
+User:
+> yes commit (F7: `d278a1f22`, `0e6405a91`)
+> start with T4
+
+- `plat/minix68k/tests/cvcheck.py` checks one executable: magic `0x04100301`, header
+  length 0x20, unused fields 0, even text/data sizes, stack (`--stack N` exact,
+  otherwise 16384 or up to a 64K boundary as `cv` chooses, never below 16384), the
+  GEMDOS relocation table (start offset even and inside text+data, steps even, 1 =
+  skip 254, ends with 0 exactly at the end of the file), and every relocated long ≤
+  text+data+bss. `--min-relocs`/`--min-skips` for the cases that need them.
+- `plat/minix68k/tests/cv.sh` (test `cv_test` in `tests/build.py`, part of `make`)
+  builds `tests/cv/empty.c`, `ptrs.c` (pointers to text, rom, data, bss),
+  `relocgap.c` (F2: two 30000-byte initialised arrays between pointers, ≥ 236 skip
+  bytes), `near64k.c` (F3: built once to measure, then a bss pad makes
+  text+data+bss = 65528; the stack must be 16384 and the image exactly 65528), and
+  the examples hilo.c, mandelbrot.c, startrek.c, hilo.bas.
+- Results (fresh clone, `make`): all pass; e.g. relocgap relocs 46, skips 236, table
+  286 bytes; startrek 2664 relocations, stack 16384.
+- The checker itself: seven damaged copies of the relocgap output (magic, a byte cut
+  off, a byte added, an odd step, a relocated long beyond bss, total 100 bytes short,
+  start offset past text+data) are each rejected with the right message. With the
+  pre-F2 `cv` (`8625a2877`) put into the staging tree, `cv.sh` fails on relocgap
+  (`malloc(): corrupted top size`) and near64k (stack 8); the rest passes.

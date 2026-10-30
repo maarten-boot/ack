@@ -276,12 +276,14 @@ In order of value:
   and run in a directory of their own with `lang/basic/test/tst`, stdin `/dev/null`).
   test26 has a 16-bit expected output (`plat/minix68k/tests/basic/test26.b.g`);
   test17/test18 are skipped (B1). Found and fixed on the way: L1, L2.
-- [ ] **T4 — `cv` regression tests (host only, no emulator):** a small script that
-  links test programs and checks the output: header fields (32 bytes, sizes), the
-  relocation table decodes, ends with 0, every relocated long points into the image
-  (≤ end of bss). Cases: an empty program, the examples, and the F2 case (pointers
-  separated by large initialised arrays: before the fix `cv` aborted). Also a program
-  whose size is just under 64 KB (F3, stack size).
+- [x] **T4 — `cv` regression tests (host only, no emulator)** (done 2026-10-30):
+  `plat/minix68k/tests/cv.sh` builds test programs and checks each with
+  `cvcheck.py`: header fields, stack (16 KB or up to a 64K boundary), the relocation
+  table decodes, steps are even, it ends with 0 at the end of the file, every
+  relocated long points at most to the end of bss. Cases (`tests/cv/`): an empty
+  program, pointers in data, the F2 gaps (≥ 236 skip bytes), F3 (image padded to
+  65528 bytes: stack must be 16384), and hilo.c, mandelbrot.c, startrek.c, hilo.bas.
+  With the pre-F2 `cv` it fails on F2 (abort) and F3 (stack 8).
 - [x] **T10 — float conformance test** (done 2026-10-29). Kahan's Paranoia
   (`plat/minix68k/tests/paranoia.c`, unmodified; its own `read()` declaration is
   removed by `sed` at build time) runs in the emulator on every `make`;
