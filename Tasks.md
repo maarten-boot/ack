@@ -24,10 +24,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
     `b64_jsft()` and sticky bits; test `fp_test` (`fpgen.c` on the host,
     `fpcheck.c` in the emulator, 30,000 cases incl. subnormals) and Paranoia's
     rounding and sticky-bit checks pass; `MAX_FLAWS` 2 → 1.
-  - [ ] Step 2: infinity, NaN, -0. `extend()` treats exponent 2047 as a number
-    (overflow gives infinity's bits, which then act as 2^1024), knows no NaN, and
-    makes -0 +0. Paranoia's last FLAW ("unbalanced range": its `V` is infinity).
-    Also: operations, `cmf`, `cfi`/`cfu` with them; test cases in `fpgen.c`.
+  - [x] Step 2 (2026-10-30): infinity, NaN, -0. `extend()` treated exponent 2047
+    as a number (overflow gave infinity's bits, which then acted as 2^1024), knew
+    no NaN and made -0 +0; 0/0 trapped, x/0 and overflow inside EXTEND gave 0;
+    `cmf8` put the smallest subnormal below -0. Now IEEE results for the
+    operations, negation, comparison (a NaN is unequal to everything; EM's `cmf`
+    has no "unordered", so < or > holds), conversions and frexp; `fp_test` has a
+    special-value set; Paranoia: no failures, defects nor flaws, `MAX_FLAWS` 0.
+    Not tested: `modf` and `cfi`/`cfu` with infinity or NaN (overflow paths).
   - [ ] Step 3: ACK's C library: `sqrt` not correctly rounded (-0.60 to +0.50 ulp),
     `pow(0,0)` gives 0 (should be 1), `printf` `%.17e` prints only 16 digits and
     infinity as 1.797693134862316e+308.

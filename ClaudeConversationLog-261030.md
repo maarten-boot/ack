@@ -369,3 +369,57 @@ User:
   differ`, `fp subnormal: 10000 cases, 0 differ`). With the old `mach/proto/fp`:
   `fp_test` fails (18 differ) and `paranoia_test` fails (flaws=2, max 1). `fpgen`
   with ASan+UBSan (strict) and with clang: no reports, identical output.
+
+### F1b, 3: step 2, infinity, NaN, -0 (tried in a scratch clone)
+
+User:
+> i pushed (CI for `aa22b0173` passed: clang 91 s, build-linux 92 s, sanitizers 126 s)
+> start with step 2
+
+- Representation: `EXT_INFNAN` (32767) as the EXTEND exponent; mantissa `NORMBIT`
+  for infinity, more bits (`EXT_QNAN` = NORMBIT + quiet bit) for NaN, so the
+  existing "mantissa 0 = zero" tests stay right. `EXT_ISNAN`/`EXT_ISINF`/
+  `EXT_ISZERO` in `FP_bias.h`.
+- `extend()`: exponent 2047/255 → `EXT_INFNAN`, NaNs made quiet; zeros keep their
+  sign. `compact()`: `EXT_INFNAN` → exponent all ones (a NaN keeps its top fraction
+  bits); zero written with its sign (was `zrf8`, always +0).
+- `add_ext()`: NaN in → NaN; inf + finite = inf; inf - inf = NaN; -0 + +0 = +0;
+  exact cancellation gives +0. `sub_ext()` is now "negate e2 and add" (the sign kept
+  as `0x8000`, as `extend()` sets it: `mul`/`div` combine signs with XOR).
+  `mul_ext()`: NaN; inf * 0 = NaN, inf * x = inf; 0 * x = signed 0; overflow in
+  EXTEND gives inf (was a zero mantissa, i.e. 0). `div_ext()`: NaN; inf/inf = NaN,
+  inf/x = inf, x/inf = 0, 0/0 = NaN (no trap), x/0 traps EFDIVZ as before and then
+  gives inf (was 0); the sign XOR moved to the top.
+- `adf4`/`adf8`: their shortcuts for a +0 operand returned the other operand,
+  wrong for -0 (-0 + +0 must be +0): removed. `ngf4`/`ngf8`: negate 0 too. `cmf4`/
+  `cmf8`: a NaN compares unequal to everything (EM's `cmf` has no "unordered", so
+  < or > holds for it). `fef4`/`fef8` (frexp): inf and NaN unchanged.
+- Bugs found on the way: (1) my first `sub_ext()` flipped the sign to 1, not
+  0x8000: 906 of 20,000 cases wrong; (2) in `extend()` bit 31 of the shifted
+  mantissa still holds the lowest exponent bit, so every infinity became a NaN
+  (`2 * inf` gave NaN; Paranoia's overflow search then ended at 2^-32: a SERIOUS
+  DEFECT); (3) old, in `cmf8()`: with opposite signs only the high words were
+  checked for zero, so the smallest subnormal compared below -0.
+- `fpgen.c`: mode `s`, operands often ±0, ±inf, NaN, the largest/smallest numbers
+  or large enough to overflow; also `f2d`, negation (`n`, `fn`) and comparison (`c`,
+  `fc`: a hex digit with bits for <, ==, >, !=). `fpcheck.c`: any NaN matches any
+  NaN; with a NaN only == and != are checked. `fpcheck.sh`: third set, seed 3, 10,000.
+- Results: normal 20,000 + 100,000, subnormal 10,000, special 11,704 + 93,485
+  cases: 0 differ; full build, all tests pass. Old code on the special set: trap 7
+  (0/0) ends the program, 20 differences before that. Paranoia: "No failures,
+  defects nor flaws have been discovered. The arithmetic diagnosed seems
+  Satisfactory." (host: "Excellent"; what remains is step 3: `sqrt` rounding,
+  `pow(0,0)`, `printf` of infinity, "Overflow saturates at V0 = 2.3e-10").
+- Not covered by tests: `fif` (modf) and `cfi`/`cfu` with infinity or NaN (they
+  take their existing overflow paths).
+
+### F1b, 4: step 2 applied
+
+User:
+> yes apply step 2
+
+- The scratch diff applied unchanged (15 files in `mach/proto/fp`, `fpgen.c`,
+  `fpcheck.c`, `fpcheck.sh`); `paranoia.sh`: `MAX_FLAWS` 0.
+- Checked: fresh clone, full build: all tests pass (fp normal 20,000, subnormal
+  10,000, special 11,704: 0 differ; Paranoia with no FLAW allowed). `fpgen` with
+  ASan+UBSan (strict) and with clang: no reports, identical output in all 3 modes.
