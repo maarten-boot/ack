@@ -777,3 +777,6 @@ User:
   that uses `__FILE__` and `#include`s a header, and a file with a
   2000-character `#line` name. Every line directive and `__FILE__` must carry
   the full name. The old cpp.ansi aborts on both cases.
+- Four-platform build of `upstream/cpp-longpath` (cpm linux68k linuxppc pc86):
+  exit 0 in 3m09s, no `@@FAIL`, 194 tests (the 193 of the earlier baseline plus
+  `lang/cem/cpp.ansi+test`). Scratch worktree removed afterwards.
