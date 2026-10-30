@@ -287,3 +287,29 @@ User:
 - Checked (scratch clone): full build, all tests pass. The test fails with the old
   `gencode.c` (emulator address error after "ERROR 2") and with the old `read.c`
   (address error during the LINE INPUT recursion).
+
+### Small leftovers, 6: F9, build-system notes
+
+User:
+> yes commit (B4: `94be27f74`, `8f2be0337`)
+> i pushed (CI for `8f2be0337` passed: sanitizers 94 s, build-linux 57 s, clang 83 s)
+> start with F9, delete drone and travis
+
+- Deleted `.drone.yml` (teaci/msys32 image, `make +ack`) and `.travis.yml` (Ubuntu
+  trusty, macOS, `make +ack`): the `+ack` target no longer exists; CI is
+  `.github/workflows/ccpp.yml`.
+- `Makefile`: `PLATS ?= minix68k` instead of `$(error ...)` for a command-line
+  `PLATS`. Upstream added the error in `9a9f8ee1d` (2025, "variables set on the
+  command line don't trigger a build.mk regeneration"); `build/ab.mk` now writes
+  every make variable (command-line ones included) to `$(OBJ)/vars.txt` and removes
+  `build.ninja` when that changes. README: one line that PREFIX and PLATS can be
+  given on the command line.
+- `OBJ`: `build/_sandbox.py` (vendored from ab) links inputs into
+  `join(sandbox, path)` and runs commands there with relative paths, so `OBJ` must be
+  a relative path inside the tree. Not patched (it is ab's design); the `Makefile`
+  stops with "OBJ=...: must be a relative path inside the source tree" for an
+  absolute path, `~` or any `..`.
+- Checked (scratch clone): `OBJ=/abs/obj`, `../obj`, `a/../b`, `~/obj` each stop
+  with the message; default `make` builds and tests minix68k; `make PLATS="minix68k
+  pc86"` regenerates and builds pc86 too; `make` again regenerates without pc86 (0
+  pc86 targets in build.ninja); a further `make`: no regeneration, "no work to do".

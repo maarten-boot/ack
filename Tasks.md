@@ -224,10 +224,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 - [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob remains): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
   16 KB buffer per chunk; `chmem()` (`:333`) can return an uninitialised `new`.
   `plat/minix68k/libsys/build.py:11-13` globs `plat/minix/libsys`, which does not exist.
-- [ ] **F9 — build system:** `build/_sandbox.py:24,35,46` breaks with an `OBJ=`
-  outside the tree (`join()` with an absolute or `..` path); `Makefile:13` refuses
-  `PLATS=` on the command line (`PLATS ?=` would help upstreaming); `.drone.yml` and
-  `.travis.yml` are dead.
+- [x] **F9 — build system** (done 2026-10-30). `.drone.yml` and `.travis.yml` (Ubuntu
+  trusty, macOS, a `+ack` target that no longer exists) deleted. `PLATS ?=`: it can
+  be given on the command line again (upstream forbade it in `9a9f8ee1d` because
+  command-line variables did not regenerate the build; the current `build/ab.mk`
+  writes all variables to `vars.txt` and regenerates when they change: checked).
+  `build/_sandbox.py` (vendored ab) needs `OBJ` relative inside the tree; not
+  patched, the `Makefile` now stops with a clear message on `OBJ=/..`, `~..` or
+  a path with `..`.
 - [x] **N5 — signed `char` as array index** (fixed 2026-10-29 at the call sites) (11 places, e.g.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
