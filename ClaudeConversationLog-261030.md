@@ -909,21 +909,21 @@ User:
   (double and float) were 1 ulp off. `0.1 + 0.2` gave the double nearest 0.3,
   not `0.30000000000000004`. A float constant also kept 64 bits, so
   `(double)0.1f` was the double 0.1 and `0.1f == 0.1` was true.
-- **flt_arith (commit 1):** add, sub, mul and div keep what does not fit as a
+- **flt_arith (commit 2):** add, sub, mul and div keep what does not fit as a
   sticky lowest bit (round to odd): the bits shifted out of the smaller operand
   in add/sub, the lower half of mul's 128-bit product (was rounded half-up),
   div's remainder (was dropped). New `flt_rnd(e, bits, emin)` rounds to `bits`
   bits, to nearest and ties to even, with subnormal numbers below `2^emin`.
   With operands and result rounded by `flt_rnd`, a result is what IEEE
   arithmetic gives. Documented in `flt_arith.3`.
-- **cemcom.ansi (commit 2):** every float constant is rounded to its type with
+- **cemcom.ansi (commit 3):** every float constant is rounded to its type with
   `flt_rnd()`: a literal, a folded result, an integer converted to a floating
   type, and a conversion between floating types. A 4-byte type is IEEE single
   and an 8-byte type IEEE double, subnormal numbers included. For targets
   without IEEE floating point, the new `-Vm<n>` gives the mantissa bits of an
   8-byte type; pdpv7 (PDP-11 floating point, 56 bits) uses `-Vm56`. Documented
   in `cemcom.ansi.1`.
-- **flt_str2flt (commit 2):** negative exponents were applied by multiplying
+- **flt_str2flt (commit 3):** negative exponents were applied by multiplying
   with reciprocal powers of ten, which is not exact; with the sticky bit even
   `1.0` came out as slightly more than 1, and an exact tie like
   `9007199254740993.0` rounded the wrong way. It now divides by the exact powers
@@ -943,7 +943,7 @@ User:
     checks fail. Operands are plain globals, not volatile: the powerpc ncg
     table has no pattern for the `nop` cemcom.ansi emits after a volatile
     access (a separate fix).
-- **linuxppc emulator (first commit):** constfold is the first test that
+- **linuxppc emulator (commit 1):** constfold is the first test that
   multiplies, or does single-precision arithmetic, at run time on linuxppc,
   and the emulator (`plat/linuxppc/emu/instructions.dat`) could not run it.
   `fmul` was decoded as X-form with FRB, but it is A-form with FRA and FRC
@@ -956,6 +956,8 @@ User:
   half-up when it converts the constant text; the constants it now gets are
   already rounded, so that has no effect on IEEE targets. The Modula-2 front end
   folds with flt_arith too and is not changed here.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
 - Four-platform build of `upstream/float-fold` (cpm linux68k linuxppc pc86):
   exit 2. linuxppc cannot compile `constfold,e,.c`: "No table entry for 86"
   (`op_nop`). cemcom.ansi emits `nop` after a volatile read (`eval.c:732`) and
@@ -982,3 +984,9 @@ User:
   baseline plus `modules/src/flt_arith+test` and linuxppc constfold).
   constfold without volatile also passes on minix68k (scratch build).
 - PR text above updated (constfold without volatile, the emulator commit).
+- User: "yes commit". rosco-minix68k: b671803d1 (emulator), 422a397d4 (constfold
+  without volatile), fc42e9aca (log, N12). `upstream/float-fold` rebuilt at
+  7afa32a0a: dcd015359 (emulator), 3312e5d9b (flt_arith), 56beb86fc
+  (cemcom.ansi), 5039af8bb (constfold, without volatile); its tree is the one
+  the clean four-platform build tested. Needs a force-push. Scratch worktree
+  removed.
