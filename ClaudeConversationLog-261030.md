@@ -990,3 +990,6 @@ User:
   (cemcom.ansi), 5039af8bb (constfold, without volatile); its tree is the one
   the clean four-platform build tested. Needs a force-push. Scratch worktree
   removed.
+- User pushed and opened the PR: `upstream/float-fold` at 5039af8bb is
+  davidgiven/ack#381, "Floating constants folded as the target computes them".
+  Open upstream PRs from the fork now: #375-#381.
