@@ -4,16 +4,18 @@
  * computes: each operand rounded to its type, each result rounded to its
  * type, to nearest and ties to even (IEEE). */
 
-/* Operands in globals to defeat constant folding. */
-volatile double d243 = 2.43, d622 = 622.780, d483 = 483.667, d807 = 807.214;
-volatile double d866 = 866.963, d603 = 603.873, d975 = 975.296, d16 = 16.764;
-volatile double dp1 = 0.1, dp2 = 0.2, d3 = 3.0;
-volatile float f243 = 2.43f, f622 = 622.780f, f24 = 24.41f, f58 = 58.848f;
-volatile float f975 = 975.296f, f16 = 16.764f, fp1 = 0.1f;
+/* Operands in globals to defeat constant folding. (Not volatile: the
+ * powerpc ncg table has no pattern for the nop cemcom.ansi emits after
+ * a volatile access.) */
+double d243 = 2.43, d622 = 622.780, d483 = 483.667, d807 = 807.214;
+double d866 = 866.963, d603 = 603.873, d975 = 975.296, d16 = 16.764;
+double dp1 = 0.1, dp2 = 0.2, d3 = 3.0;
+float f243 = 2.43f, f622 = 622.780f, f24 = 24.41f, f58 = 58.848f;
+float f975 = 975.296f, f16 = 16.764f, fp1 = 0.1f;
 
 /* The folded values, stored so that comparing them is not folded. */
-volatile double d;
-volatile float f;
+double d;
+float f;
 
 /* Bypasses the CRT, so there's no stdio. */
 void _m_a_i_n(void)
