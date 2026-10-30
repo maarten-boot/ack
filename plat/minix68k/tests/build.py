@@ -74,4 +74,27 @@ for expected in sorted(glob(f"{BASIC_DIR}/*.b.g")):
         )
     )
 
-export(name="tests", deps=[".+plat_tests", ".+paranoia_test"] + basic_tests)
+# cv's output checked without running it (header, stack size, relocation
+# table): see cv.sh for the cases.
+CV_EXAMPLES = [
+    "examples/hilo.c",
+    "examples/mandelbrot.c",
+    "examples/startrek.c",
+    "examples/hilo.bas",
+]
+
+test(
+    name="cv_test",
+    ins=["./cv.sh", "./cvcheck.py"] + CV_EXAMPLES,
+    deps=glob("plat/minix68k/tests/cv/*.c") + ["plat/minix68k+all", "+common"],
+    commands=[
+        "ACKDIR=$(INSDIR) sh $[ins[0]] $(INSDIR)/bin/ack $[ins[1]] "
+        + "plat/minix68k/tests/cv "
+        + " ".join(CV_EXAMPLES)
+    ],
+)
+
+export(
+    name="tests",
+    deps=[".+plat_tests", ".+paranoia_test", ".+cv_test"] + basic_tests,
+)
