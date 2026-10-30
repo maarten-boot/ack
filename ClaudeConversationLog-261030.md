@@ -113,3 +113,35 @@ User:
 - Found on the way, not caused by this: building ACK's own libraries at `-O4`
   (`make ACKCFLAGS=-O4`) fails to link the examples ("Undefined: __II0, __II5",
   ego inliner names), with or without the description: E6.
+
+### T8: a sanitizer CI job
+
+User:
+> i pushed (CI for `e03f1a3f7` passed)
+> start with T8
+
+- Built every host tool with `CC=HOSTCC="gcc -fsanitize=address,undefined …"` (in
+  `CC` so links that ignore `LDFLAGS` get it too) and ran `make` with all tests.
+  Leak checking off (`ASAN_OPTIONS=detect_leaks=0`): the passes never free.
+- Findings, first in recover mode to collect them, then strict
+  (`-fno-sanitize-recover=all`) with `ninja -k 0` so every test runs (the test
+  driver hides the output of passing tests, so recover mode missed UB inside the
+  emulator; `make -k` does not reach ninja):
+  - **S1** ASan: `util/opt/putline.c:138` read 25 bytes after `em_flag` (133
+    entries): `instr` 159 = `ps_mes` with no operand; pseudos went through the
+    instruction table for the control-flow and the `sp_cend` decisions. Fixed: only
+    instructions use `em_flag`; a pseudo without its operand always gets `sp_cend`
+    (em_code's `CC_endnarg` writes `ps_end` + `sp_cend` the same way).
+  - **S2** UBSan undefined shifts: LLgen's bit-set macros (`1 << 31`), cpp's and
+    cemcom's `arith_sign` (`1L << 63`; cpp has its own `arith.h`), `peephole.c`
+    (twice), cemcom/m2/pc constant folding (`(x << n) >> n` sign extension of
+    negatives, `bt = (bt << 8) + 0377` overflowing), ncg `rombit`, ego `cset.c`
+    (three), Musashi `divs` (`remainder << 16`, four). All shifted as unsigned.
+  - **A1** UBSan alignment in `util/led` and `modules/src/object/rd.c`: left out of
+    the job for now (task).
+- Result: strict mode, the full build and all 92 minix68k tests: 0 ASan, 0 UBSan
+  reports, 1 min 55 s on 4 cores. Normal build before and after: all 107 minix68k
+  programs/objects and 521 archive members byte-identical.
+- `.github/workflows/ccpp.yml`: new job `build-linux-sanitizers` (same pinned
+  checkout, re-checked: v7.0.1 is still the latest release and the hash a commit);
+  the YAML parses.

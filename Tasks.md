@@ -61,6 +61,24 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `_readint`/`_readflt` (`lang/basic/lib/read.c`) retry with "?Redo" when reading
   fails without EOF; with fd 0 closed (as `util/build`'s testrunner does) a program
   that reads input crashes. Low: normal use always has a stdin.
+- [x] **S1 — `em_opt` read past `em_flag[]`** (fixed 2026-10-30, all platforms).
+  `util/opt/putline.c` looked up pseudo-instructions (e.g. a `mes` without operands)
+  in `em_flag[]`, which only covers instructions: ASan "global-buffer-overflow, 25
+  bytes after em_flag". Whether `sp_cend` was written after such a pseudo depended on
+  the bytes after the table. Now: `em_flag` only for instructions; a pseudo without
+  its operand always gets `sp_cend` (as em_code's `C_end_narg`).
+- [x] **S2 — undefined shifts** (fixed 2026-10-30): `1 << 31` / `1L << 63` and shifts
+  of negative values in LLgen's set macros (`util/LLgen/src/sets.h`), cpp's and
+  cemcom's `arith_sign`, `em_opt` `peephole.c`, the constant folding of cemcom, m2 and
+  pc (`cstoper.c` sign extension and masks), ncg `fillem.c` (`rombit`), ego `cset.c`
+  and Musashi's `divs` (`plat/linux68k/emu/musashi/m68k_in.c`). Shift as unsigned; all
+  minix68k output byte-identical.
+- [ ] **A1 — misaligned struct accesses in the linker.** UBSan "alignment":
+  `util/led` (`relocate.c`, `scan.c`, `save.c`, `finish.c`, `extract.c`) and
+  `modules/src/object/rd.c` read `struct outname`/`outsect` (with 8-byte members on
+  a 64-bit host) from 4-byte aligned positions in led's memory pieces. Works on
+  x86-64 and arm64; undefined in C and would fault on strict-alignment hosts. The
+  sanitizer job leaves the alignment check out until this is fixed.
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -269,9 +287,11 @@ In order of value:
   `paranoia.c`, small integer/long/struct tests) with the host gcc and with ACK for
   minix68k, run both (natively and in the emulator), compare outputs. Mind 16-bit
   `int`: use `long` where values exceed 32767.
-- [ ] **T8 — sanitizer and clang jobs for the host tools**: build with
-  `-fsanitize=address,undefined` and run T2–T4 (would have caught F2); build with
-  clang (still Linux) to catch strict-aliasing UB like F11/N7 before it bites.
+- [x] **T8 — sanitizer CI job** (done 2026-10-30): `build-linux-sanitizers` in
+  `.github/workflows/ccpp.yml` builds all host tools with gcc ASan + UBSan (strict:
+  any finding aborts; no leak or alignment checks, see A1) and runs all tests (about
+  2 minutes on 4 cores). Getting it clean fixed one out-of-bounds read (S1) and
+  undefined shifts (S2). Not done: a clang job.
 - [x] **T9 — CI** (done: the Linux job runs plain `make`, which runs all 47
   minix68k tests, about 70 s on GitHub).
 
