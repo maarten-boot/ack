@@ -712,3 +712,27 @@ User:
   - #379 `upstream/libc-fixes` (e6e11b09d)
 - #375, #377, #378 and #379 carry GitHub's default title (the branch name); the
   intended titles are in the PR texts above.
+
+### N10: long file names in cpp.ansi
+
+- User: "start with the cpp.ansi fix", then "yes apply".
+- `preprocess.c`: the global `char Xbuf[256]` is gone. A new `line_dir(n)` macro
+  formats only the prefix and the line number (`# 123 "`) into a local
+  `lbuf[32]`, echoes the file name and then `"` and a newline; the first directive
+  and `do_line_dir` both use it.
+- `replace.c`: `__FILE__` is built in a `static char *FilNamBuf` that is
+  `realloc`ed to `strlen(FileName) + 3` (was `[PATHLENGTH]`, 3 bytes short).
+- Test `lang/cem/cpp.ansi/longpath.sh`, rule `lang/cem/cpp.ansi+test`, part of
+  `all` (not on Windows): a 600+ character path with an `#include`, and a
+  2000-character `#line` name; every line directive and `__FILE__` must carry the
+  full name. First run: `__FILE__` is written as `char *f =  "name" ;`, so the
+  check now ignores spacing.
+- The old cpp.ansi (HEAD's preprocess.c and replace.c) on the test: "buffer
+  overflow detected", exit 134, in both cases. The fixed one: passes.
+- Tasks.md: N10 (done), N11 (file names are not escaped in line directives and
+  `__FILE__`; old, not touched).
+- Full `make PLATS=minix68k` in a scratch copy: exit 0, no `@@FAIL`, 95 tests
+  run in the second pass (the cpp.ansi test and the minix68k tests), as in the
+  Docker build. `macro_func()`'s text is copied by `macro2buffer()` right away, so
+  `realloc` moving `FilNamBuf` leaves no stale pointer; `__FILE__` cannot be
+  `#undef`ed (NOUNDEF), so it is never freed.

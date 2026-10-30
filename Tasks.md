@@ -272,6 +272,16 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   marked the callee dispensable: the function body was removed, the call stayed
   ("Undefined: __II0"). Now `byte cl_flags`. Every program at `-O4`+ with a static
   function called once was affected, not only ACK's own libraries.
+- [x] **N10 — long file names overran cpp.ansi's buffers** (fixed 2026-10-30).
+  `preprocess.c` formatted every line directive into `char Xbuf[256]`, so a source
+  path of about 245 characters crashed the preprocessor; `replace.c` built
+  `__FILE__` in `FilNamBuf[PATHLENGTH]`, 3 bytes short, and a `#line` name can be
+  any length. Line directives are now echoed (prefix and number formatted into 32
+  bytes), `__FILE__` gets `realloc`ed. Test: `lang/cem/cpp.ansi/longpath.sh`
+  (a 600+ character path and a 2000-character `#line` name).
+- [ ] **N11 — file names are not escaped in line directives and `__FILE__`.**
+  `cpp.ansi` writes the name between quotes as it is, so a `"` or `\` in a file
+  name gives a broken string. Old; rare on Linux.
 - [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
