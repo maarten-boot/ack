@@ -993,3 +993,47 @@ User:
 - User pushed and opened the PR: `upstream/float-fold` at 5039af8bb is
   davidgiven/ack#381, "Floating constants folded as the target computes them".
   Open upstream PRs from the fork now: #375-#381.
+
+### N12: volatile on powerpc and mips
+
+- User: "start with N12". `volatile int v; int f(void) { return v; } void g(void)
+  { v = 1; }` compiled with -O for every buildable upstream platform: fails on
+  linuxppc and osxppc (powerpc ncg: "No table entry for 86") and linuxmips (mcg:
+  "treebuilder: unknown simple instruction 'nop'", abort); cpm, em22, linux386,
+  linux68k, minix68k, msdos386, msdos86, osx386, pc86, pdpv7, rpi compile it.
+  (qemuppc has no build.py upstream.) Every other ncg table has `pat nop`, all
+  with `kills ALL`, some with a debug call.
+- /tmp ran out of inodes during the all-platform build (tmpfs); the user
+  rebooted the host, /tmp is now on the root file system.
+- User: "yes apply". `mach/powerpc/ncg/table`: `pat nop` with `kills ALL`
+  (EM specials). `mach/proto/mcg/treebuilder.c`: `case op_nop:` ignored, like
+  `op_lni`. New `tests/plat/core/volatile,e,.c` in the core set: volatile char,
+  int, long, unsigned read, written, `++`, `+=`, `*=`, `--`; a write through a
+  plain pointer then a read; a read in a loop. No double (core also runs on cpm
+  and pc86).
+- Upstream tree (7afa32a0a plus the change), `PLATS = all`: exit 0 in 8m43s, no
+  `@@FAIL`, 197 tests (the 193 baseline plus volatile on cpm, linux68k, linuxppc,
+  pc86). The new test compiles with -O for all 14 buildable platforms (osxppc
+  and linuxmips have no test runner).
+- Fork (`make`, minix68k): exit 0, 100 tests (99 plus volatile), no `@@FAIL`,
+  fold seeds 1-3 0 wrong.
+
+#### upstream/volatile-nop — powerpc and mcg: accept the nop emitted after a volatile access
+
+- cemcom.ansi emits an EM `nop` after every volatile access
+  (`lang/cem/cemcom.ansi/eval.c`). The powerpc ncg table had no pattern for it,
+  so any C program that reads a volatile failed on linuxppc and osxppc with
+  "No table entry for 86". mcg (linuxmips) aborted with "treebuilder: unknown
+  simple instruction 'nop'". The other ncg tables all have `pat nop`.
+- `mach/powerpc/ncg/table`: `pat nop` with `kills ALL`, as in the other tables,
+  so no register copy of a volatile is reused after the access.
+- `mach/proto/mcg/treebuilder.c`: `op_nop` is ignored, like `op_lni`.
+- Test `tests/plat/core/volatile,e,.c` (core set): reads, writes and
+  read-modify-writes of volatile char, int, long and unsigned, a write through
+  a plain pointer followed by a read, and a read in a loop. No test in
+  tests/plat used volatile before.
+- Built with `PLATS = all`: no `@@FAIL`, 197 tests (the new one on cpm,
+  linux68k, linuxppc and pc86); the test also compiles for osxppc and
+  linuxmips, which have no test runner.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
