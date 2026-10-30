@@ -886,3 +886,5 @@ User:
   for subnormal results (about 34 double and 43 float subnormal results and 160
   zeros per seed); bits compared with Python's IEEE values. 8,793 constants,
   0 wrong.
+- Full `make PLATS=minix68k` in a fresh scratch copy (committed tree): exit 0,
+  99 tests (the 97 before plus constfold and fold_test), no `@@FAIL`.

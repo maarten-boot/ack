@@ -46,7 +46,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   same double (5,000 of 5,000). Beyond 17 digits ACK prints zeros or approximate
   digits; an exact decimal tie is rounded up (glibc: to even). Fix would need
   big-number arithmetic (as in `dtoa`).
-- [ ] **F1d — the compiler folds float constants 1 ulp off** (found 2026-10-30, all
+- [x] **F1d — the compiler folds float constants 1 ulp off** (fixed 2026-10-30; found 2026-10-30, all
   platforms). `0.1 + 0.2` folded at compile time is `3fd3333333333333`; IEEE (gcc,
   and ACK's own run-time soft-float) gives `3fd3333333333334`. So a constant
   expression and the same computation at run time can differ in the last bit. The
@@ -55,8 +55,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   Step 1 done: flt_arith keeps a sticky bit in add/sub/mul/div, new `flt_rnd()`
   (test `modules/src/flt_arith/ieeetest.c`). Step 2 done: cemcom.ansi rounds
   every float constant to its type (literal, fold, `int2float`, `float2float`;
-  `-Vm56` for pdpv7), `flt_str2flt` divides by exact powers of ten. Step 3:
-  tests. Limitation: a literal of more than 19 significant digits that is
+  `-Vm56` for pdpv7), `flt_str2flt` divides by exact powers of ten. Step 3
+  done: `tests/plat/floats/constfold,e,.c`, minix68k `fold_test`. Limitation: a literal of more than 19 significant digits that is
   exactly a tie is judged on its first 19 digits. Later: `float_cst()` rounds half-up, not to
   even; `lang/m2/comp/cstoper.c` folds the same way.
 - [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
