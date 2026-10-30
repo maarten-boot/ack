@@ -674,3 +674,27 @@ User:
   tag `minix68k-20261030`), `make` (builds and runs the minix68k tests), keeps
   `/opt/ack` whole; `ACKDIR` and `PATH` set, `minix68k-emu` on the path, workdir
   `/src`. Committed before the first test build finished (user's request).
+- First test build: `git clone` in the container fails, "server verification failed:
+  certificate signer not trusted": this network inspects TLS (the host has
+  `PA-Root-CA.crt` and `forward-trust-*.crt` in `/usr/local/share/ca-certificates`,
+  the container does not). Not a Dockerfile fault; a normal network or GitHub's
+  runners clone fine.
+- Tested with a copy of the Dockerfile that copies a local checkout at
+  `minix68k-20261030` instead of cloning: build and minix68k tests in 111 s; run as
+  the user with a mounted directory, `ack -mminix68k` compiles C (`sqrt(2) =
+  1.414213562373095`) and BASIC (`2^10` = 1024), both run in `minix68k-emu`, files
+  owned by the user; `ACKDIR`, `build.ninja` in place. Image 1.13 GB (the whole
+  build tree).
+- User: "i stopped the proxy stry again". The committed Dockerfile unchanged: clone
+  from GitHub at `minix68k-20261030`, build and 95 tests in 105 s; the image
+  compiles and runs a C program (`0.1 + 0.2` = 0.30000000000000004).
+- Found with that program: `printf("%.17g", 0.1 + 0.2)` gave 0.29999999999999999.
+  The run-time soft-float is right (`a + b` with volatile operands:
+  `3fd3333333333334`, printed 0.30000000000000004, as the host); the constant
+  `0.1 + 0.2` folded by the compiler is `3fd3333333333333`, 1 ulp low (gcc folds to
+  `...334`). ACK's compile-time float arithmetic is not IEEE-rounded: new F1d.
+- `git -C /opt/ack describe` as a non-root user: "detected dubious ownership"
+  (the tree belongs to root). Harmless for compiling.
+- User: "yes add the safe.directory line and commit". Dockerfile: `git config
+  --system --add safe.directory /opt/ack`. Rebuilt (127 s); `git -C /opt/ack
+  describe --tags` as the user: `minix68k-20261030`.

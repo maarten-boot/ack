@@ -46,6 +46,12 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   same double (5,000 of 5,000). Beyond 17 digits ACK prints zeros or approximate
   digits; an exact decimal tie is rounded up (glibc: to even). Fix would need
   big-number arithmetic (as in `dtoa`).
+- [ ] **F1d — the compiler folds float constants 1 ulp off** (found 2026-10-30, all
+  platforms). `0.1 + 0.2` folded at compile time is `3fd3333333333333`; IEEE (gcc,
+  and ACK's own run-time soft-float) gives `3fd3333333333334`. So a constant
+  expression and the same computation at run time can differ in the last bit. The
+  front ends fold with their own float arithmetic (probably `modules/src/flt_arith`),
+  which does not round as IEEE does. Test: compare folded and volatile results.
 - [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
   (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
   expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;
