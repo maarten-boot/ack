@@ -28,7 +28,8 @@ RUN apt-get update \
 RUN git clone -q "$ACK_URL" /opt/ack \
 	&& git -C /opt/ack checkout -q "$ACK_REV" \
 	&& make -C /opt/ack -j"$(nproc)" LUA=lua5.4 \
-	&& ln -s /opt/ack/.obj/plat/minix68k/emu/+emu/emu /usr/local/bin/minix68k-emu
+	&& ln -s /opt/ack/.obj/plat/minix68k/emu/+emu/emu /usr/local/bin/minix68k-emu \
+	&& git config --system --add safe.directory /opt/ack
 
 ENV ACKDIR=/opt/ack/.obj/staging
 ENV PATH=/opt/ack/.obj/staging/bin:$PATH
