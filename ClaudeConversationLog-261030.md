@@ -698,3 +698,17 @@ User:
 - User: "yes add the safe.directory line and commit". Dockerfile: `git config
   --system --add safe.directory /opt/ack`. Rebuilt (127 s); `git -C /opt/ack
   describe --tags` as the user: `minix68k-20261030`.
+
+### Wrap-up: CI and the upstream PRs
+
+- User: CI for `45af3ff79` succeeded (all three jobs).
+- User pushed the five `upstream/*` branches to the fork and opened the PRs on
+  davidgiven/ack (checked with `git ls-remote` and the GitHub API; heads match the
+  local branches):
+  - #375 `upstream/basic-fixes` (b83a4b45d)
+  - #376 `upstream/tests-plat-wordsize` (1155d5a4f)
+  - #377 `upstream/ub-fixes` (1c1a655da)
+  - #378 `upstream/ego-fixes` (138489ccd)
+  - #379 `upstream/libc-fixes` (e6e11b09d)
+- #375, #377, #378 and #379 carry GitHub's default title (the branch name); the
+  intended titles are in the PR texts above.
