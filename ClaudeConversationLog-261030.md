@@ -888,3 +888,60 @@ User:
   0 wrong.
 - Full `make PLATS=minix68k` in a fresh scratch copy (committed tree): exit 0,
   99 tests (the 97 before plus constfold and fold_test), no `@@FAIL`.
+
+### upstream/float-fold: a seventh upstream branch
+
+- User: "yes make the upstream branch". `upstream/float-fold` at 7afa32a0a with
+  c0cb9686d, 5edb1704c and 469e9bc9f cherry-picked: 6cad7e617, 57d988216,
+  f798121cc. One conflict, in the top-level `build.py` (upstream has no
+  `lang/cem/cpp.ansi+test`): `all` there gets only `modules/src/flt_arith+test`.
+  The fork-only `fold_test` (minix68k) is not included. Scratch worktree with
+  line 13 of the Makefile set to `PLATS = cpm linux68k linuxppc pc86` (not
+  committed).
+- User: "yes put the PR text in the log".
+
+#### upstream/float-fold — Floating constants folded as the target computes them
+
+- **Problem:** cemcom.ansi keeps float constants in flt_arith's 64-bit mantissa,
+  folds them at that precision and rounds to the target type only when it writes
+  them out. A folded constant could then differ from the same computation at
+  run time: in a probe of 300 random pairs, 11-39% of folded `+ - * /` results
+  (double and float) were 1 ulp off. `0.1 + 0.2` gave the double nearest 0.3,
+  not `0.30000000000000004`. A float constant also kept 64 bits, so
+  `(double)0.1f` was the double 0.1 and `0.1f == 0.1` was true.
+- **flt_arith (commit 1):** add, sub, mul and div keep what does not fit as a
+  sticky lowest bit (round to odd): the bits shifted out of the smaller operand
+  in add/sub, the lower half of mul's 128-bit product (was rounded half-up),
+  div's remainder (was dropped). New `flt_rnd(e, bits, emin)` rounds to `bits`
+  bits, to nearest and ties to even, with subnormal numbers below `2^emin`.
+  With operands and result rounded by `flt_rnd`, a result is what IEEE
+  arithmetic gives. Documented in `flt_arith.3`.
+- **cemcom.ansi (commit 2):** every float constant is rounded to its type with
+  `flt_rnd()`: a literal, a folded result, an integer converted to a floating
+  type, and a conversion between floating types. A 4-byte type is IEEE single
+  and an 8-byte type IEEE double, subnormal numbers included. For targets
+  without IEEE floating point, the new `-Vm<n>` gives the mantissa bits of an
+  8-byte type; pdpv7 (PDP-11 floating point, 56 bits) uses `-Vm56`. Documented
+  in `cemcom.ansi.1`.
+- **flt_str2flt (commit 2):** negative exponents were applied by multiplying
+  with reciprocal powers of ten, which is not exact; with the sticky bit even
+  `1.0` came out as slightly more than 1, and an exact tie like
+  `9007199254740993.0` rounded the wrong way. It now divides by the exact powers
+  10^0 to 10^27, and digits that do not fit in 64 bits set the sticky bit
+  instead of being dropped. (A literal with more than 19 significant digits that
+  is exactly a tie is still judged on its first 19 digits.)
+- **Tests:**
+  - `modules/src/flt_arith/ieeetest.c`, rule `modules/src/flt_arith+test`, part
+    of `all` (not on Windows): 1,580,135 random double and float operations
+    (subnormal results, exact results and ties included) against the host's
+    IEEE arithmetic. The old add, mul and div give 3, 24 and 38 wrong results.
+  - `tests/plat/floats/constfold,e,.c` in the floats set (run on linuxppc):
+    folded constants compared with the same expressions computed at run time,
+    and with exact values: `+ - * /` of double and float, float precision of
+    float constants, `0.1 + 0.2 == 0.30000000000000004`, ties rounded to even
+    and subnormal results. With the compiler before this PR, 20 of its 26
+    checks fail.
+- **Not changed:** the back ends' `float_cst` (`h/con_float`) still rounds
+  half-up when it converts the constant text; the constants it now gets are
+  already rounded, so that has no effect on IEEE targets. The Modula-2 front end
+  folds with flt_arith too and is not changed here.
