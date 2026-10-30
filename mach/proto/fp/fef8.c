@@ -9,6 +9,7 @@
 	SEPERATE DOUBLE INTO EXPONENT AND FRACTION (FEF 8)
 */
 
+#include	"FP_bias.h"
 #include	"FP_types.h"
 
 void
@@ -22,8 +23,9 @@ struct fef8_returns *r;
 						*/
 
 	extend(&s1.d[0],&buf,sizeof(DOUBLE));
-	if (buf.exp == 0 && buf.m1 == 0 && buf.m2 == 0) {
-		p->e = 0;
+	if ((buf.exp == 0 && buf.m1 == 0 && buf.m2 == 0) ||
+	    buf.exp == EXT_INFNAN) {
+		p->e = 0;	/* 0, infinity, NaN: unchanged */
 	}
 	else {
 		p->e = buf.exp + 1;

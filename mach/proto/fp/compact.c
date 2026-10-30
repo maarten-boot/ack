@@ -29,9 +29,18 @@ int	size;
 	 */
 		DOUBLE *DBL = (DOUBLE *) (void *) to;
 
+		if (f->exp == EXT_INFNAN) {
+			/* infinity or NaN: exponent all ones; a NaN keeps
+			 * its top fraction bits, the quiet bit among them */
+			DBL->d[0] = f->m1 >> DBL_RUNPACK;
+			DBL->d[1] = (f->m1 << DBL_LUNPACK) | (f->m2 >> DBL_RUNPACK);
+			f->exp = DBL_MAX + 1;
+			goto dbl_store;
+		}
 		if ((f->m1|(f->m2 & DBL_ZERO)) == 0L)	{
-			zrf8(DBL);
-			return;
+			DBL->d[0] = DBL->d[1] = 0L;	/* zero, with its sign */
+			f->exp = 0;
+			goto dbl_store;
 		}
 		f->exp += DBL_BIAS;	/* restore proper bias	*/
 		if (f->exp > DBL_MAX)	{
@@ -98,6 +107,7 @@ dbl_over:			trap(EFOVFL);
 		 * 2) shift and store exponent
 		 */
 
+dbl_store:
 		DBL->d[0] &= DBL_MASK;
 		DBL->d[0] |= 
 			((long) (f->exp << DBL_EXPSHIFT) << EXP_STORE);
@@ -127,9 +137,16 @@ dbl_over:			trap(EFOVFL);
 
 		/* local CAST conversion		*/
 		SGL = (SINGLE *) (void *) to;
+		if (f->exp == EXT_INFNAN) {
+			/* infinity or NaN (see above) */
+			*SGL = f->m1 >> SGL_RUNPACK;
+			f->exp = SGL_MAX + 1;
+			goto sgl_store;
+		}
 		if ((f->m1 & SGL_ZERO) == 0L)	{
-			*SGL = 0L;
-			return;
+			*SGL = 0L;	/* zero, with its sign */
+			f->exp = 0;
+			goto sgl_store;
 		}
 		f->exp += SGL_BIAS;	/* restore bias	*/
 		if (f->exp > SGL_MAX)	{
@@ -182,6 +199,7 @@ sgl_over:			trap(EFOVFL);
 		 * 2) shift and store exponent
 		 */
 
+sgl_store:
 		*SGL &= SGL_MASK; /* B23-B31 are 0 */
 		*SGL |= ((long) (f->exp << SGL_EXPSHIFT) << EXP_STORE);
 		if (f->sign)

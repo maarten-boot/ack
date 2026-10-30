@@ -21,8 +21,6 @@ DOUBLE	f;
 {
 	unsigned char	*p;
 
-	if (f.d[0] != 0 || f.d[1] != 0) {
-		p = (unsigned char *) &f + OFF;
-		*p ^= 0x80;
-	}
+	p = (unsigned char *) &f + OFF;
+	*p ^= 0x80;	/* also for 0: -(+0) is -0 */
 }

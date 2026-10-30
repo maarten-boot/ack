@@ -18,13 +18,6 @@ SINGLE	s1,s2;
 	EXTEND	e1,e2;
 	int	swap = 0;
 
-	if (s1 == (SINGLE) 0) {
-		s1 = s2;
-		return;
-	}
-	if (s2 == (SINGLE) 0) {
-		return;
-	}
 	extend(&s1,&e1,sizeof(SINGLE));
 	extend(&s2,&e2,sizeof(SINGLE));
 	add_ext(&e1,&e2);
