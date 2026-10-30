@@ -372,3 +372,10 @@ terminated), `util/opt/putline.c:404` (commented in the code), `util/ego/cf/cf.c
 with a 16-bit `size_t` on the board), `mach/m68k2/as/mach5.c:288`, `util/led/finish.c:147`,
 `util/ack/trans.c:618` (maybe-uninitialized false alarms),
 `modules/src/flt_arith/flt_str2fl.c:244` (redundant check).
+
+The ACK 6.0 pre-releases (checked 2026-10-30): upstream's branches
+`release-6-0-pre-1` (2007), `-pre-3` (2007) and `-pre-4` (2010), and the tag
+`release-6-0-pre-5` (2016), have no commits that are not in upstream `default`
+(`git rev-list 7afa32a0a..<ref>` is empty for each). They are old snapshots of
+the main line; this fork is based on `default` (2026), so it has everything in
+them. Nothing to take over.

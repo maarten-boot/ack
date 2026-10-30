@@ -736,3 +736,17 @@ User:
   Docker build. `macro_func()`'s text is copied by `macro2buffer()` right away, so
   `realloc` moving `FilNamBuf` leaves no stale pointer; `__FILE__` cannot be
   `#undef`ed (NOUNDEF), so it is never freed.
+
+### The ACK 6.0 pre-release branches
+
+- User: "there exists an attempt at a v6 for ack at
+  .../tree/release-6-0-pre-4; if there is anything useful there for us we could add
+  it to a todo list".
+- `git ls-remote` of davidgiven/ack: branches `release-6-0-pre-1`, `-pre-3`,
+  `-pre-4`, tags `release-6-0-pre-1` to `-pre-5`. `release-6-0-pre-4` is both a
+  branch (7273130b4, 2010-08-04, a cvs2hg fixup commit for the tag) and a tag
+  (9d2d5606e); a plain `git fetch ... release-6-0-pre-4` picked the tag.
+- Fetched each into FETCH_HEAD (no refs added): `git rev-list --count
+  7afa32a0a..<ref>` is 0 for all of them; `default` has 2023 commits after
+  `-pre-4`. The pre-releases are ancestors of `default`: nothing that this fork
+  (based on `default`) lacks. Noted under "Checked, not a problem" in Tasks.md.
