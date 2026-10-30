@@ -132,8 +132,28 @@ test(
     ],
 )
 
+# Only 68010 user-mode instructions in the libraries (T6), checked by
+# disassembling them; a file with an FPU and a privileged instruction must be
+# caught.
+test(
+    name="m68kcheck_test",
+    ins=["./m68kcheck.sh"],
+    deps=["plat/minix68k+all", "+common"],
+    commands=[
+        "ACKDIR=$(INSDIR) sh $[ins[0]] $(INSDIR)/bin/ack "
+        + "$(PLATDEP)/minix68k/m68kcheck $(PLATIND)/minix68k"
+    ],
+)
+
 export(
     name="tests",
-    deps=[".+plat_tests", ".+paranoia_test", ".+fp_test", ".+cv_test", ".+fold_test"]
+    deps=[
+        ".+plat_tests",
+        ".+paranoia_test",
+        ".+fp_test",
+        ".+cv_test",
+        ".+fold_test",
+        ".+m68kcheck_test",
+    ]
     + basic_tests,
 )

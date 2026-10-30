@@ -51,6 +51,12 @@ odd word/long access or NULL access stops it with an error:
 
 	minix68k-emu prog [args...]
 
+lib/ack/minix68k/m68kcheck checks ACK object files and archives without
+running them: it reports FPU (F-line), non-68010 and privileged
+instructions; -s allows the privileged ones (kernel and boot code):
+
+	\$ACKDIR/lib/ack/minix68k/m68kcheck [-s] file.o lib.a ...
+
 The rosco Minix port links with its own C library instead of ACK's:
 crtso.o emrts.o <objects> libc.a \$ACKDIR/share/ack/minix68k/libem.a
 \$ACKDIR/share/ack/minix68k/libend.a
