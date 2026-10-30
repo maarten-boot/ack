@@ -780,3 +780,57 @@ User:
 - Four-platform build of `upstream/cpp-longpath` (cpm linux68k linuxppc pc86):
   exit 0 in 3m09s, no `@@FAIL`, 194 tests (the 193 of the earlier baseline plus
   `lang/cem/cpp.ansi+test`). Scratch worktree removed afterwards.
+
+### F1d: float constant folding (investigation)
+
+- User: "start with F1d". Scratch build of the minix68k compiler and emulator.
+- Path of a float constant in cemcom.ansi: literal -> `flt_str2flt` (flt_arith,
+  64-bit mantissa) -> folded with `flt_add/sub/mul/div` (`fltcstoper.c`) ->
+  `flt_flt2str` (18 digits) -> EM `rom` fcon -> back end `float_cst`
+  (`h/con_float`) parses it again and rounds to 24/53 bits, half-up.
+- Probe (scratchpad `f1dgen.py`): 300 random pairs, each as literals and folded
+  with + - * /, double and float; compiled for minix68k, bits compared with
+  Python's IEEE. Literals: 0 of 600 wrong. Folded: d+ 32/300, d- 49, d* 86,
+  d/ 97; f+ 32/300, f- 42, f* 112/288, f/ 95/283 wrong, all by 1 ulp.
+- Causes:
+  1. Folding is done on the 64-bit values: operands are not rounded to their
+     type first, and the result is rounded only once at the end (0.1 + 0.2
+     gives the double nearest 0.3, not IEEE's 0.30000000000000004).
+  2. A float constant keeps 64 bits: `(double)0.1f` gives 3fb999999999999a
+     (double 0.1), not 3fb99999a0000000; `float2float()` only changes the type.
+  3. `int2float()` of a constant is not rounded: `(double)(float)16777217L`
+     gives 16777217.
+  4. `float_cst()` rounds half-up, not to even: `9007199254740993.0` gives
+     2^53+2, `16777217.0f` 16777218.
+  5. flt_add/mul/div truncate (no sticky bit), so rounding their 64-bit
+     result to 53 bits can still be wrong in rare ties.
+- pdpv7 (PDPFLOAT): double has a 56-bit mantissa, so precision cannot be
+  derived from the size alone. lang/m2/comp/cstoper.c folds the same way.
+
+### F1d step 1: flt_arith rounds correctly (sticky bit, flt_rnd)
+
+- User: "yes apply step 1".
+- `flt_add.c`: a new `sft_lost()` shifts and reports whether bits fell off; the
+  aligned operand's lost bits and a carry's lost bit become a sticky lowest bit
+  (rounding to odd); in a subtraction the result is first lowered by one unit
+  (the exact difference is a little less).
+- `flt_mul.c`: the lower 64 bits of the 128-bit product are a sticky bit
+  (was: rounded half-up at 64 bits).
+- `flt_div.c`: a non-zero remainder is a sticky bit (was: truncated).
+- New `flt_rnd.c`: `flt_rnd(e, bits, emin)` rounds to nearest, ties to even, with
+  fewer bits below 2^emin (subnormals). Declared and documented in
+  `flt_arith.h` and `flt_arith.3`. Correct for operands rounded by `flt_rnd`
+  (at most 62 bits): for wider operands an exponent difference of 1 with
+  cancellation can lose the sticky bit, which does not happen once the operands
+  have at most 62 bits.
+- New test `modules/src/flt_arith/ieeetest.c` (rule `modules/src/flt_arith+test`,
+  part of `all`): random double and float operands (any magnitudes, close
+  magnitudes, short mantissas for exact results and ties, subnormal products and
+  sums), `flt_add/sub/mul/div` then `flt_rnd`, against the host's IEEE result:
+  1,580,135 of 1,580,135 equal. With HEAD's add only 3 wrong, mul only 24, div
+  only 38, all three 65.
+- The module's old `test.c` (decimal in and out) passes with the new code as
+  with the old. Literal probe with the rebuilt compiler, seeds 1-5: 3000 of
+  3000 literals exact; folding still wrong (step 2).
+- Full `make PLATS=minix68k` in a fresh scratch copy: exit 0, 97 tests, no
+  `@@FAIL`. `Amake.srclist` left alone (unused; lists files that no longer exist).

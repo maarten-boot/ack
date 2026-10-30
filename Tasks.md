@@ -52,6 +52,11 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   expression and the same computation at run time can differ in the last bit. The
   front ends fold with their own float arithmetic (probably `modules/src/flt_arith`),
   which does not round as IEEE does. Test: compare folded and volatile results.
+  Step 1 done: flt_arith keeps a sticky bit in add/sub/mul/div, new `flt_rnd()`
+  (test `modules/src/flt_arith/ieeetest.c`). Step 2: cemcom.ansi rounds every
+  float constant to its type (literal, fold, `int2float`, `float2float`; pdpv7
+  doubles 56 bits). Step 3: tests. Later: `float_cst()` rounds half-up, not to
+  even; `lang/m2/comp/cstoper.c` folds the same way.
 - [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
   (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
   expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;
