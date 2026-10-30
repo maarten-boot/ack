@@ -66,6 +66,15 @@ test(
     commands=["sh $[ins[0]] $[ins[1]] $[ins[2]] $[ins[3]]"],
 )
 
+# Floating constants folded by the compiler against Python's IEEE arithmetic
+# (F1d): about 9000 random literals and folded + - * /, double and float.
+test(
+    name="fold_test",
+    ins=["./fold.sh", "./foldgen.py", "plat/minix68k/emu"],
+    deps=["plat/minix68k+all", "+common"],
+    commands=["ACKDIR=$(INSDIR) sh $[ins[0]] $(INSDIR)/bin/ack $[ins[1]] $[ins[2]]"],
+)
+
 # The BASIC test programs (lang/basic/test) with their expected output.
 # test17 and test18 expect a division by zero to arrive as SIGFPE ("trap 8")
 # and be caught by the BASIC runtime's signal handlers; on minix68k it is an
@@ -125,6 +134,6 @@ test(
 
 export(
     name="tests",
-    deps=[".+plat_tests", ".+paranoia_test", ".+fp_test", ".+cv_test"]
+    deps=[".+plat_tests", ".+paranoia_test", ".+fp_test", ".+cv_test", ".+fold_test"]
     + basic_tests,
 )
