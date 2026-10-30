@@ -1108,3 +1108,58 @@ User:
   no specific actions on BASIC, anything else that benefits C and asm is ok to
   investigate". B1 and the BASIC part of the C + BASIC build target marked
   deferred in Tasks.md. Next work: C and assembler only.
+
+### T6: 68010 instruction check (investigation)
+
+- User: "start with T6". What can put non-68010 code in minix68k output:
+  - The m68k2 assembler (used only by minix68k) knows 68000/68010 plus the 68881
+    set: 68020 integer instructions and addressing modes (`extb`, `muls.l`,
+    bit fields, scaled index) are syntax errors, so they cannot get in.
+  - 68881 instructions (`f*`) are accepted: on a 68010 they are F-line traps.
+    `mach/m68k2/libem/build.py` already leaves `fp68881.s` out.
+  - Privileged instructions are accepted (move from/to SR, andi/ori/eori to SR,
+    move USP, movec, moves, reset, stop, rte); `move from SR` is privileged on
+    the 68010 but not on the 68000.
+  - The ncg table (m68020, `TBL68000`) has no SR/USP code; its FPU templates are
+    not compiled in for TBL68000.
+- Prototype (scratch `t6/m68kcheck.c`, host C): reads ACK objects and archives
+  with `modules/src/object`, disassembles each text section with Musashi's
+  `m68kdasm.c` (`plat/linux68k/emu/musashi`) as a 68010, reports F-line and
+  A-line words (Musashi counts F-line as valid: a legal trap), opcodes invalid
+  on a 68010, and privileged instructions. Linear decoding got out of step on
+  alignment padding (`0000` before a procedure's `link`, after `rts` or after a
+  `jsr` to a routine that does not return): zero words after a jump/return are
+  skipped, and decoding restarts at every text symbol (an instruction that runs
+  into a symbol means out of step).
+- Results: all 588 ACK objects of a full minix68k build (libc, libsys, libem,
+  libend, boot.o, c-ansi.o, the BASIC/Pascal/Modula-2 libraries, the 51 test
+  objects, dhrystone): no findings. Negative checks: `fmove.x`, `fadd.d`,
+  `move sr,d0`, `move d0,sr`, `and/or #,sr`, `move usp`, `reset`, `stop`, `rte`
+  are each reported; `fp68881.s` gives 90 findings; `move d0,ccr` (user mode
+  on the 68000 too) is not.
+- Found on the way: the m68k2 assembler starts in 68000 mode, and a 68010
+  instruction (`rtd`, `movec`, `move ccr,<ea>`) gives "68010 instruction
+  (warning)", which in ACK's assembler counts as an error (`warning()` in
+  `mach/proto/as/comm7.c` increments `nerrors`): assembly fails unless the file
+  starts with `.68010`. For a 68010-only target the default could be 68010.
+- User: "yes apply". `plat/minix68k/m68kcheck/m68kcheck.c` + `build.py`
+  (`cprogram` with Musashi's `m68kdasm.c`, `m68k.h`, the emulator's
+  `m68kconf.h` and `sim.h`, `modules/src/object`), installed as
+  `$(PLATDEP)/minix68k/m68kcheck`; option `-s` allows privileged instructions.
+  The emulator's `m68kconf.h` maps Musashi's reads to `cpu_read_byte/word/long`
+  and `cpu_read_word_dasm/long_dasm`, so the tool defines those.
+  Test `plat/minix68k/tests/m68kcheck.sh`, rule `m68kcheck_test` in `tests`.
+- The test's bad file (`move.l d0,d1; fmove.x fp0,fp1; move.w sr,d0; rts`)
+  first gave only 1 finding: a 68010 decodes an F-line word as one word, so
+  `fmove`'s extension word swallowed `move sr`. F-line words are now decoded as
+  a 68040 would (Musashi knows the FPU there), giving the real length and a
+  readable text (`fmove.s (A7), FP0`); `fp68881.s` now gives 122 findings.
+- Checked: all 588 ACK objects of the minix68k build clean with the installed
+  tool; built with ASan + UBSan (as the sanitizer CI job) it runs clean on all
+  of them and on `fp68881.s`. Tasks.md: T6 done; new A2 (assembler starts in
+  68000 mode), noted only.
+- `plat/minix68k/mkrelease.sh`: the README now describes
+  `lib/ack/minix68k/m68kcheck`. Release script run on a fresh build: the tarball
+  holds the tool, smoke test ok.
+- Fresh full `make` (minix68k): exit 0 in 1m41s, 101 tests (100 plus
+  `m68kcheck_test`), no `@@FAIL`.

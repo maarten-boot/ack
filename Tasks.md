@@ -291,6 +291,11 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   any length. Line directives are now echoed (prefix and number formatted into 32
   bytes), `__FILE__` gets `realloc`ed. Test: `lang/cem/cpp.ansi/longpath.sh`
   (a 600+ character path and a 2000-character `#line` name).
+- [ ] **A2 — the minix68k assembler starts in 68000 mode.** A 68010 instruction
+  (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gives "68010 instruction (warning)",
+  and the assembler counts warnings as errors (`warning()` in
+  `mach/proto/as/comm7.c`), so assembly fails unless the file has `.68010`. For
+  a 68010-only target the default could be 68010 (`model = 1`). Found with T6.
 - [ ] **N11 — file names are not escaped in line directives and `__FILE__`.**
   `cpp.ansi` writes the name between quotes as it is, so a `"` or `\` in a file
   name gives a broken string. Old; rare on Linux.
@@ -365,10 +370,14 @@ In order of value:
 - [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
   structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
   of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
-- [ ] **T6 — 68010 instruction check without an emulator**: assemble/compile the
-  runtime libraries and a set of C files to `.s` and fail on 68020/FPU mnemonics
-  (`extb`, `muls.l`, `divs.l`, bit-field ops, `rtd`, scaled index, `f*`) and on
-  `move sr,<ea>` (privileged on the 68010). Cheap; T1 catches the same at run time.
+- [x] **T6 — 68010 instruction check without an emulator** (done 2026-10-30).
+  68020 integer instructions and addressing modes cannot get in: the m68k2
+  assembler rejects them. New host tool `plat/minix68k/m68kcheck` (installed as
+  `lib/ack/minix68k/m68kcheck`): disassembles the text of ACK objects and
+  archives with Musashi as a 68010 and reports F-line (FPU), A-line, non-68010
+  and privileged instructions (`-s` allows privileged ones, for kernel/boot
+  code). Test `m68kcheck_test`: all minix68k libraries and start-off files clean,
+  and a file with `fmove` and `move sr,d0` must give exactly those two findings.
 - [ ] **T7 — differential tests**: compile the same portable C programs (examples,
   `paranoia.c`, small integer/long/struct tests) with the host gcc and with ACK for
   minix68k, run both (natively and in the emulator), compare outputs. Mind 16-bit
