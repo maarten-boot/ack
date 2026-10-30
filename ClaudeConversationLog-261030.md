@@ -145,3 +145,25 @@ User:
 - `.github/workflows/ccpp.yml`: new job `build-linux-sanitizers` (same pinned
   checkout, re-checked: v7.0.1 is still the latest release and the hash a commit);
   the YAML parses.
+
+### Small leftovers, 1: a clang CI job
+
+User:
+> i pushed (CI for `71763e7d4` passed: build-linux 82 s, build-linux-sanitizers 136 s)
+> can we do 5 first or do you expect more items from the other to be added ?
+> start with the clang job
+
+- Answered: the small items can go first; F1b/A1 and the clang job may add findings;
+  upstream contributions are best last (then they include everything).
+- A clang 21 build (`make CC=clang HOSTCC=clang`): builds, all 92 minix68k tests
+  pass (the Modula-2 failure of 2026-10-24 is gone with `-fno-strict-aliasing`).
+- Its 65 warnings: mostly EM opcodes > 127 in a signed `char`/`byte` (by design, masked
+  with `BMASK`), the known `led/scan.c` overflow guard, an intended assignment in a
+  condition (`cemcom.ansi/arith.c:57`), dangling elses that match the indentation
+  (`cemcom.ansi/eval.c`), and **M1**, two real Modula-2 bugs: `! df->df_kind &
+  (D_ERROR|D_TYPE)` (`type.c:674`, always 0 with D_TYPE 0x10 and D_ERROR 0x4000) and
+  `!end_reached & REACH_FLAG` (`walk.c:635`); now `!(… & …)`. After the fix a test
+  program gets "statement not reached" after a RETURN in a loop; the type.c path (opaque
+  types) was not reached by my test.
+- `.github/workflows/ccpp.yml`: third job `build-linux-clang` (apt `clang`, `make
+  CC=clang HOSTCC=clang`). Fresh clones with all changes: gcc 92/92, clang 92/92.

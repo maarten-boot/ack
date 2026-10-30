@@ -79,6 +79,12 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   a 64-bit host) from 4-byte aligned positions in led's memory pieces. Works on
   x86-64 and arm64; undefined in C and would fault on strict-alignment hosts. The
   sanitizer job leaves the alignment check out until this is fixed.
+- [x] **M1 — two `!a & b` bugs in the Modula-2 front end** (fixed 2026-10-30, found by
+  clang's `-Wlogical-not-parentheses`). `lang/m2/comp/type.c:674`
+  `! df->df_kind & (D_ERROR|D_TYPE)` is `(!df_kind) & 0x4010`, always 0, so that
+  "is not a type" error could never be reported (opaque type resolution; not
+  reproduced with a test); `walk.c:635` `!end_reached & REACH_FLAG` missed
+  "statement not reached" when other flags were set. Now `!(a & b)`.
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -291,7 +297,8 @@ In order of value:
   `.github/workflows/ccpp.yml` builds all host tools with gcc ASan + UBSan (strict:
   any finding aborts; no leak or alignment checks, see A1) and runs all tests (about
   2 minutes on 4 cores). Getting it clean fixed one out-of-bounds read (S1) and
-  undefined shifts (S2). Not done: a clang job.
+  undefined shifts (S2). A third job, `build-linux-clang`, builds with clang and
+  runs all tests (2026-10-30); its warnings found M1.
 - [x] **T9 — CI** (done: the Linux job runs plain `make`, which runs all 47
   minix68k tests, about 70 s on GitHub).
 
