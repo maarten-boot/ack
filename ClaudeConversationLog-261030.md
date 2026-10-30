@@ -750,3 +750,30 @@ User:
   7afa32a0a..<ref>` is 0 for all of them; `default` has 2023 commits after
   `-pre-4`. The pre-releases are ancestors of `default`: nothing that this fork
   (based on `default`) lacks. Noted under "Checked, not a problem" in Tasks.md.
+
+### upstream/cpp-longpath: a sixth upstream branch
+
+- User: "yes make the upstream branch". `upstream/cpp-longpath` at 7afa32a0a with
+  0065e1ead cherry-picked (no conflicts): 509093957. Built in a scratch worktree;
+  upstream's Makefile refuses `PLATS` on the command line, so line 13 of the
+  worktree's Makefile was set to `PLATS = cpm linux68k linuxppc pc86` (not
+  committed).
+- User: "yes put the PR text in the log".
+
+#### upstream/cpp-longpath — cpp.ansi: no length limit on file names in line directives and __FILE__
+
+- **Line directives** were formatted with `sprintf` into `char Xbuf[256]`
+  (`preprocess.c`), so a source path of about 245 characters or more overran
+  it and the preprocessor crashed (glibc: "buffer overflow detected"). Now only
+  the prefix and the line number go through a small buffer; the file name is
+  echoed after it, so it can be any length.
+- **`__FILE__`** was built in `FilNamBuf[PATHLENGTH]` (`replace.c`): the name
+  plus two quotes and the terminating zero is 3 bytes more than a name of
+  `PATHLENGTH`, and a `#line` name can be longer still. It now gets a buffer of
+  the name's length (`realloc`); the text is copied by `macro2buffer()` right
+  away and `__FILE__` cannot be `#undef`ed, so moving the buffer is safe.
+- **Test** `lang/cem/cpp.ansi/longpath.sh`, rule `lang/cem/cpp.ansi+test`, part
+  of `all` (not on Windows): a file in a directory more than 600 characters deep
+  that uses `__FILE__` and `#include`s a header, and a file with a
+  2000-character `#line` name. Every line directive and `__FILE__` must carry
+  the full name. The old cpp.ansi aborts on both cases.
