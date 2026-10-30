@@ -32,3 +32,14 @@ jobs:
       run: sudo apt update && sudo apt install bison flex lua5.3
     - name: make with sanitizers
       run: make "CC=$SAN" "HOSTCC=$SAN"
+
+  # The host tools built with clang, whose optimiser exploits undefined
+  # behaviour differently from gcc's, and all tests run with them.
+  build-linux-clang:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+    - name: apt
+      run: sudo apt update && sudo apt install bison flex lua5.3 clang
+    - name: make with clang
+      run: make CC=clang HOSTCC=clang
