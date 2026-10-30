@@ -1092,3 +1092,19 @@ User:
     `Terminal.Write(ch)` writes 3 bytes per character (`c c \0`). Not looked
     into; would matter only if Modula-2 is used on the target.
   - Scratch probe `m2probe.py` / `m2cmp.py` not kept in the repo.
+
+### ACK BASIC: compiler, deferred
+
+- User: "The BASIC in ACK is that a interpreter or a compiler ?" A compiler
+  (`doc/basic.doc`, "BASIC-EM compiler"): `em_bem` turns a `.b`/`.bas` file into
+  EM (`lib/descr/fe`, `.bas` -> `.k`), the usual optimizer, code generator,
+  assembler and linker make native code, linked with `libbasic`
+  (`lang/basic/lib`). No interactive environment: AUTO, CONT, EDIT, LIST, LOAD,
+  NEW, RENUM, RUN, SAVE and others are not recognized (appendix A); CALL, INKEY,
+  INPUT$, LEFT$, INSTR$, FIELD/GET/PUT/LSET/RSET not available yet; PEEK/POKE
+  ill-defined. Dialect after Microsoft BASIC. An interactive BASIC on the board
+  would be an interpreter (written in C and compiled with ACK, or bbcbasic).
+- User: "skip the BASIC in ACK for now, make notes and log them but currently
+  no specific actions on BASIC, anything else that benefits C and asm is ok to
+  investigate". B1 and the BASIC part of the C + BASIC build target marked
+  deferred in Tasks.md. Next work: C and assembler only.

@@ -79,7 +79,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   The compiler pushes the base first, so the exponent is `_power()`'s first
   parameter; the 1985 runtime computed `exp(first * log(second))`, the 2013 rewrite
   (`d5f010774`) `pow(first, second)`: `n ^ .5` gave `.5 ^ n`.
-- [ ] **B1 — BASIC cannot catch arithmetic errors on minix68k.** The BASIC runtime
+- [ ] **B1 — BASIC cannot catch arithmetic errors on minix68k.** *(Deferred
+  2026-10-30: no BASIC work for now.)* The BASIC runtime
   (`lang/basic/lib/trap.c`) catches errors with Unix signals (`signal(i, _trpfatal)`);
   a division by zero on minix68k is an EM trap (7, EFDIVZ, from the soft-float code)
   that `libem`'s `.trp` prints and exits on, it never becomes SIGFPE. So `ON ERROR`
@@ -210,7 +211,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   upstream at `7afa32a0a` and applies its own patch; today's fixes (F2 `cv`, E1/E2
   libem) reach the board only if it builds `rosco-minix68k` from this repository
   instead (after P1). A change in that project, for its owner.
-- [ ] **C + BASIC build target** (decided 2026-10-23, not implemented):
+- [ ] **C + BASIC build target** (decided 2026-10-23, not implemented; *BASIC
+  part deferred 2026-10-30: no BASIC work for now, C and asm first*):
   `langs` parameter for `build_plat_libs()` (`plat/build.py`), `langs=("c","basic")`
   in `plat/minix68k/build.py`, a `c_basic` export in `build.py`, minix68k examples
   without `.mod`/`.p` (`examples/build.py`).
