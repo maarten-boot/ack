@@ -4,11 +4,14 @@
  * every case that differs, then a count. Exit status 1 if any differ.
  * Any NaN matches any NaN (payload and sign are not compared). For a
  * comparison with a NaN only == and != are checked: EM's cmf has no
- * "unordered", so < or > holds. Assumes big-endian doubles and 32-bit
+ * "unordered", so < or > holds. sq and rt test the C library: sqrt, and
+ * printf "%.16e" read back by strtod. Assumes big-endian doubles and 32-bit
  * longs.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 union d { double d; unsigned long w[2]; };
 union f { float f; unsigned long w; };
@@ -99,6 +102,15 @@ int main(void)
 				unsigned long l;
 				sscanf(sa, "%lx", &l);
 				got.d = (double)(long)l;
+			} else if (!strcmp(op, "sq")) {
+				rdd(sa, &a);
+				got.d = sqrt(a.d);
+			} else if (!strcmp(op, "rt")) {
+				char buf[40];
+				rdd(sa, &a);
+				r = a;	/* must come back unchanged */
+				sprintf(buf, "%.16e", a.d);
+				got.d = strtod(buf, (char**)0);
 			} else if (!strcmp(op, "f2d")) {
 				union f fa;
 				sscanf(sa, "%lx", &fa.w);

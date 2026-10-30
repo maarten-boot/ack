@@ -4,8 +4,9 @@
 #	paranoia.sh <emulator> <paranoia program> <testrunner>
 #
 # Fails when the run does not end normally, or Paranoia counts any
-# FAILURE, SERIOUS DEFECT or DEFECT, or more than MAX_FLAWS FLAWs. The
-# software floating point (mach/proto/fp) has none since F1b (Tasks.md).
+# FAILURE, SERIOUS DEFECT or DEFECT, or more than MAX_FLAWS FLAWs, or its
+# verdict is not "Excellent" (that also catches its warnings, e.g. for
+# sqrt rounding or pow(0, 0)). Since F1b (Tasks.md) there is none.
 
 MAX_FLAWS=0
 
@@ -21,11 +22,12 @@ echo "$out" | awk -v maxflaws=$MAX_FLAWS '
 	/^The number of  DEFECTs/         { defects = $NF + 0 }
 	/^The number of  FLAWs/           { flaws = $NF + 0 }
 	/Normal end of execution/         { ended = 1 }
+	/appears to be Excellent/         { excellent = 1 }
 	END {
-		bad = !ended || failures || serious || defects || flaws > maxflaws
+		bad = !ended || failures || serious || defects || flaws > maxflaws || !excellent
 		if (bad)
-			printf "paranoia: ended=%d failures=%d serious=%d defects=%d flaws=%d (max %d)\n", \
-			    ended, failures, serious, defects, flaws, maxflaws
+			printf "paranoia: ended=%d failures=%d serious=%d defects=%d flaws=%d (max %d) excellent=%d\n", \
+			    ended, failures, serious, defects, flaws, maxflaws, excellent
 		exit bad
 	}
 ' && exit 0

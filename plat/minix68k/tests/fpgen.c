@@ -4,7 +4,8 @@
  * round to nearest even). op: + - * / (double), f+ f- f* f/ (float),
  * d2f (double to float), f2d, i2d (long to double), n fn (negation),
  * c fc (comparison: the result is a hex digit with bits for <, ==, >,
- * !=); b is 0 when unused. Operands have
+ * !=), sq (sqrt, from the C library), rt (printf "%.16e" and strtod
+ * must give a back: result 0); b is 0 when unused. Operands have
  * random mantissas, often with many trailing zeros or ones (exact and
  * near ties), and close or far exponents (alignment, cancellation).
  * fpcheck.c recomputes them on minix68k.
@@ -96,7 +97,14 @@ static int cmpbits(int lt, int eq, int gt) { return lt << 3 | eq << 2 | gt << 1 
 /* special mode: one case, or 0 if not usable */
 static int one_special(void)
 {
-	int op = rnd() % 12;
+	int op = rnd() % 13;
+	if (op == 12) {
+		double a = sd();
+		if (a < 0)
+			return 0;
+		printf("sq %016llx 0 %016llx\n", (unsigned long long)d2u(a), (unsigned long long)d2u(sqrt(a)));
+		return 1;
+	}
 	if (op < 4) {
 		double a = sd(), b = sd(), r;
 		if (op == 3 && b == 0 && isfinite(a) && a != 0)
@@ -141,7 +149,7 @@ int main(int argc, char** argv)
 			i += one_special();
 			continue;
 		}
-		int op = rnd() % 10;
+		int op = rnd() % 12;
 		int span = (rnd() % 3 == 0) ? 60 : 3;  /* close or far exponents */
 		int lo = denorm ? -1060 : -900, hi = denorm ? -1000 : 900;
 		if (op < 4) {
@@ -172,6 +180,11 @@ int main(int argc, char** argv)
 			float r = (float)a;
 			if (!finite_f(r)) continue;
 			printf("d2f %016llx 0 %08x\n", (unsigned long long)d2u(a), f2u(r));
+		} else if (op == 10) {
+			double a = fabs(rd(lo, hi));
+			printf("sq %016llx 0 %016llx\n", (unsigned long long)d2u(a), (unsigned long long)d2u(sqrt(a)));
+		} else if (op == 11) {
+			printf("rt %016llx 0 0\n", (unsigned long long)d2u(rd(lo, hi)));
 		} else {
 			long l = (long)(int32_t)rnd();
 			printf("i2d %08lx 0 %016llx\n", (unsigned long)(uint32_t)l, (unsigned long long)d2u((double)l));
