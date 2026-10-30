@@ -834,3 +834,35 @@ User:
   3000 literals exact; folding still wrong (step 2).
 - Full `make PLATS=minix68k` in a fresh scratch copy: exit 0, 97 tests, no
   `@@FAIL`. `Amake.srclist` left alone (unused; lists files that no longer exist).
+
+### F1d step 2: cemcom.ansi rounds float constants to their type
+
+- User: "start with step 2" (plan given), then "yes apply step 2".
+- `fltcstoper.c`: new `fltcstround(expr)` rounds a constant with `flt_rnd()` by
+  the size of its type: 4 bytes 24 bits (subnormals below 2^-126), 8 bytes 53
+  bits (below 2^-1022), other sizes left alone; with `-Vm<n>` (non-IEEE target)
+  8 bytes have n bits and there are no subnormals. Called for a literal
+  (`float2expr()`, expr.c), a folded result (`fltcstbin()`), `int2float()` and
+  `float2float()` (arith.c; the latter only changed the type).
+- `options.c`: `-V` letter `m` sets `flt_dbl_bits`; `cemcom.ansi.1` documents it;
+  `plat/pdpv7/descr`: `var CC_ALIGN=-Vm56` (PDP-11 double, 56 bits).
+- First run: probe 0 wrong (5 seeds), but two literal ties wrong:
+  `9007199254740993.0` and `16777217.0f`. Cause: `flt_str2flt` scales the digits
+  by multiplying with reciprocal powers of ten (inexact); with step 1's sticky
+  bit even `"1.0"` and `"0.5"` came out as "exact value + sticky", which tips
+  a tie. Fix in `flt_str2fl.c` `add_exponent()`: divide by `s10pow[i]` (10^0 to
+  10^27, exact) for negative exponents; larger ones still multiply by
+  `r_big_10pow` after that. And digits that do not fit in 64 bits (more than
+  about 19) set the sticky bit (were dropped silently). Remaining limitation:
+  a literal of more than 19 significant digits that is exactly a tie
+  (`1.000000059604644775390625`) is judged on its first 19 digits.
+- Results: flt_arith `ieeetest` 1,580,135 equal, old `test.c` ok; probe seeds
+  1-8: 23,777 constants, 0 wrong (before: 11-39% of the folded ones); 22
+  special cases equal to gcc: `(double)0.1f`, `0.1f * 3.0`, `0.1 + 0.2`, ties
+  (`9007199254740993.0`, `16777217.0f`, `(float)16777219L`, half the smallest
+  subnormal), subnormal results (double and float), `0.1f == 0.1` (0),
+  `0.5f == 0.5` (1).
+- `-Vm56` with cemcom run directly: `0.1 + 0.2` gives `3.00000000000000003e-1`
+  (56 bits) instead of `3.00000000000000044e-1`; the float is unchanged.
+- Full `make PLATS=minix68k` in a fresh scratch copy: exit 0, 97 tests (paranoia,
+  fp, BASIC, cv, cpp.ansi, flt_arith included), no `@@FAIL`.
