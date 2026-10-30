@@ -423,3 +423,58 @@ User:
 - Checked: fresh clone, full build: all tests pass (fp normal 20,000, subnormal
   10,000, special 11,704: 0 differ; Paranoia with no FLAW allowed). `fpgen` with
   ASan+UBSan (strict) and with clang: no reports, identical output in all 3 modes.
+
+### F1b, 5: step 3, the C library (tried in a scratch clone)
+
+User:
+> i pushed (CI for `a783ea141` passed: clang 83 s, build-linux 90 s, sanitizers 197 s)
+> start with step 3
+
+- `printf` (`lang/cem/libcc.ansi/core/printf/doprnt.c`): numbers are rendered into
+  `static char buf[16]` (upstream `53a3630d2`, 2020: was `buf[1025]` on the stack,
+  too much for CP/M), and float precision was cut to 15 to "fit". But `%f` of 1e30
+  is 38 characters, of `DBL_MAX` 316, `%.15e` 23, `%lb` 32, `%.30d` 30: all written
+  past the buffer. Seen in the emulator: `printf("%f", DBL_MAX)` overwrote a
+  pointer with "000" and the program jumped to 0x303030. All platforms.
+  Fix: `buf[LDBL_MAX_10_EXP + 4 + MAXPREC]` (static, 440 bytes with 8-byte
+  doubles), precision cut to `MAXPREC` = 128 for floats and integers. `%.17e` now
+  gives 18 digits.
+- `fltpr.c`: infinity and NaN printed as `inf`/`-inf`/`nan` (`INF`/`NAN` for `%E`,
+  `%G`), with `+`/space flags; was digits of a huge number (`2.3e-10` for inf).
+- `pow.c`: `y == 0` first, so `pow(x, 0)` = 1 for every x, 0 included (C99/IEEE;
+  was 0 with EDOM). `pow(0, y < 0)` still EDOM, 0.
+- `sqrt.c`: Newton's method (5 steps with a division) replaced by an exact integer
+  square root: `frexp`/`ldexp` give x = M * 2^k (M an integer of 53/54 bits, k
+  even), the root of M * 2^52 is computed two bits at a time in pairs of 32-bit
+  words (53 steps), rounded up when the remainder exceeds the root (never a tie).
+  No byte order assumed; `sqrt(-0)` is -0 now. Host check of the same code against
+  glibc: 0 of 4,000,000 random (incl. subnormal) and 600,000 near perfect squares
+  differ.
+- Tests: `fpgen`/`fpcheck` ops `sq` (sqrt, exact) and `rt` (printf `%.16e`, then
+  strtod: the same double); about 5,000 such cases over the 3 sets. `paranoia.sh`
+  also requires the verdict "Excellent" (catches its warnings).
+- Results: all tests pass; Paranoia: "Square root appears to be correctly rounded",
+  no pow warning, "Overflow saturates at V0 = inf", "The arithmetic diagnosed
+  appears to be Excellent!" (as the host). With the old C library: fp normal 1,172,
+  subnormal 339, special 106 differ (sqrt last bit; round trip with 16 digits),
+  Paranoia `excellent=0`. `make PLATS="minix68k linux68k pc86"`: all pass (47
+  linux68k tests).
+- Measured, not fixed: `%.16e` (17 significant digits) differs from glibc in the
+  last digit in 12 of 5,000 random doubles (`_ext_str_cvt` works with 64-bit
+  extended precision); the round trip `printf`→`strtod` still gives the same
+  double in all 5,000, and ACK's `strtod` reads glibc's exact text right. Beyond 17
+  digits (`%.20e`, `%f` of big numbers) ACK prints zeros or approximate digits
+  (C only recommends exactness up to `DECIMAL_DIG`); an exact decimal tie
+  (`...124.8125` to 3 places) is rounded up, glibc to even.
+
+### F1b, 6: step 3 applied; F1b done
+
+User:
+> yes apply step 3
+
+- The scratch diff applied unchanged (`pow.c`, `sqrt.c`, `doprnt.c`, `fltpr.c`,
+  `fpgen.c`, `fpcheck.c`, `paranoia.sh`).
+- Checked: fresh clone, full build: all tests pass (fp normal 20,000, subnormal
+  10,000, special 11,601: 0 differ; Paranoia "Excellent"). `fpgen` with ASan+UBSan
+  and with clang: no reports, identical output in all 3 modes.
+- `Tasks.md`: F1b done; new F1c (17th printf digit, see step 3).

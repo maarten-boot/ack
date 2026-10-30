@@ -15,7 +15,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   (`mach/proto/fp/build.py`) and replaces `fp68881.s` in the m68k2 libem, so link
   lines stay the same. minix68k runs the `floats` set (46/46 pass); a bit-exact
   comparison with host gcc matches except `sqrt` (1 ulp, libm).
-- [ ] **F1b — soft-float is not IEEE-exact** (Kahan's Paranoia, 2026-10-29: ACK
+- [x] **F1b — soft-float is not IEEE-exact** (done 2026-10-30: Paranoia "Excellent", as the host) (Kahan's Paranoia, 2026-10-29: ACK
   minix68k "Satisfactory though flawed", host gcc "Excellent").
   - [x] Step 1 (2026-10-30): rounding of `+ - * /` (double and float) and
     double→float. `mach/proto/fp` had no sticky bit (alignment, subnormals, the
@@ -32,9 +32,20 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
     has no "unordered", so < or > holds), conversions and frexp; `fp_test` has a
     special-value set; Paranoia: no failures, defects nor flaws, `MAX_FLAWS` 0.
     Not tested: `modf` and `cfi`/`cfu` with infinity or NaN (overflow paths).
-  - [ ] Step 3: ACK's C library: `sqrt` not correctly rounded (-0.60 to +0.50 ulp),
-    `pow(0,0)` gives 0 (should be 1), `printf` `%.17e` prints only 16 digits and
-    infinity as 1.797693134862316e+308.
+  - [x] Step 3 (2026-10-30): ACK's C library (all platforms). `sqrt` is an exact
+    integer square root (was Newton, -0.60 to +0.50 ulp); `pow(x, 0)` = 1 also for
+    x = 0; `printf` prints `inf`/`nan`. `printf` rendered numbers into a static
+    16-byte buffer (upstream `53a3630d2`) and cut float precision to 15: `%f` of
+    `DBL_MAX` (316 characters) and others wrote past it (crash in the emulator);
+    now room for the longest, precision cut to 128. `fp_test` checks `sqrt` and the
+    `printf`/`strtod` round trip; `paranoia.sh` requires "Excellent".
+- [ ] **F1c — `printf` decimal digits not exact** (found 2026-10-30, all platforms;
+  low). With 17 significant digits (`%.16e`) the last digit differs from glibc in
+  about 1 of 400 doubles (`_ext_str_cvt` in `core/stdlib/ext_comp.c` works with
+  64-bit extended precision); printing and reading back (`strtod`) still gives the
+  same double (5,000 of 5,000). Beyond 17 digits ACK prints zeros or approximate
+  digits; an exact decimal tie is rounded up (glibc: to even). Fix would need
+  big-number arithmetic (as in `dtoa`).
 - [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
   (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
   expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;
