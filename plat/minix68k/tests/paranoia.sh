@@ -5,11 +5,9 @@
 #
 # Fails when the run does not end normally, or Paranoia counts any
 # FAILURE, SERIOUS DEFECT or DEFECT, or more than MAX_FLAWS FLAWs. The
-# software floating point (mach/proto/fp) has 1 known FLAW: the
-# "unbalanced range", because it treats infinity as a number (F1b in
-# Tasks.md). Lower MAX_FLAWS when that is fixed.
+# software floating point (mach/proto/fp) has none since F1b (Tasks.md).
 
-MAX_FLAWS=1
+MAX_FLAWS=0
 
 emu=$1
 prog=$2

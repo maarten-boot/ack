@@ -33,5 +33,6 @@ run() {
 
 run normal 1 20000
 run subnormal 2 10000 d
+run special 3 10000 s
 
 exit $failed
