@@ -57,10 +57,24 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `_seektab`; READ/RESTORE on channel 0 read it in `lang/basic/lib/read.c` with the
   same rules as reading the file did. No `<source>.bas.d` file is written or opened
   any more.
-- [ ] **B3 — BASIC input on a closed stdin recurses until the stack is gone.**
-  `_readint`/`_readflt` (`lang/basic/lib/read.c`) retry with "?Redo" when reading
-  fails without EOF; with fd 0 closed (as `util/build`'s testrunner does) a program
-  that reads input crashes. Low: normal use always has a stdin.
+- [x] **B3 — BASIC LINE INPUT at the end of stdin recursed until the stack was gone**
+  (fixed 2026-10-30, all platforms). Not `_readint`/`_readflt`: INPUT already stops
+  with error 2 (end of file) or 29 (stdin closed, `ferror`). `_rdline`
+  (`lang/basic/lib/read.c`) answered every `fgets()` failure on the terminal with
+  "?Redo" and called itself; `fgets()` fails only at the end or on an error, so it
+  never stopped (emulator: "write into text" or endless "?Redo"). Now the terminal
+  gives errors 2/29 like INPUT; files keep error 40 (test28 expects it; its channel
+  is opened "ab", so 29 would be more accurate).
+- [ ] **B4 — BASIC `ON ERROR GOTO` jumps to a garbage address** (all platforms;
+  found 2026-10-30 with B3, fix tried in a scratch clone only). The program prologue
+  (`lang/basic/src/gencode.c`, `prolog2()`) calls libc's `__setjmp(env, savemask)`
+  with the caller's return address pushed first, as the C front end does
+  (`cemcom.ansi/eval.c`), but without the `savemask` word: `__setjmp` reads the
+  return address from `PSIZE+WSIZE`, a misaligned half of the label plus stack
+  garbage, and `longjmp` from `_trap()` lands there (emulator: address error at
+  0x9c0001). Fix: `C_loc(0)` before `env`, `asp` 2 pointers + 1 int. Tried: `ERROR 5`,
+  INPUT and LINE INPUT at the end of stdin and with stdin closed all reach the
+  handler; all tests pass. Only test18 uses ON ERROR (skipped, B1).
 - [x] **S1 — `em_opt` read past `em_flag[]`** (fixed 2026-10-30, all platforms).
   `util/opt/putline.c` looked up pseudo-instructions (e.g. a `mes` without operands)
   in `em_flag[]`, which only covers instructions: ASan "global-buffer-overflow, 25

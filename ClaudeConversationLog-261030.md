@@ -241,3 +241,33 @@ User:
   start offset past text+data) are each rejected with the right message. With the
   pre-F2 `cv` (`8625a2877`) put into the staging tree, `cv.sh` fails on relocgap
   (`malloc(): corrupted top size`) and near64k (stack 8); the rest passes.
+
+### Small leftovers, 5: B3, BASIC input at the end of stdin; B4 found
+
+User:
+> yes commit (T4: `73e4c602e`, `466f6b96d`)
+> start with B3
+
+- Reproduced in the emulator (scratch clone at HEAD), with stdin `/dev/null`, closed
+  (`<&-`) and text:
+  - `INPUT A`, `INPUT A$`: error 2 "Out of data" at the end, error 29 "Bad file mode"
+    with stdin closed (`__fillbuf` sets `_IOERR` when `read()` fails): already fine.
+    The Tasks.md text blamed `_readint`/`_readflt`; wrong.
+  - `LINE INPUT A$`: `_rdline` (`lang/basic/lib/read.c`) called itself after
+    "?Redo" whenever `fgets()` returned NULL: at the end, endless recursion until
+    the stack reached the program ("write into text or rom"); closed: endless
+    "?Redo".
+- Fixed: on the terminal (`_chann == -1`) `_rdline` gives error 29 if `ferror`, else
+  error 2, as INPUT does; other channels keep error 40. A first version gave 29/2
+  on every channel; test28 (LINE #1 past the end of a file opened "r", which is
+  `fopen(.., "ab")`, so `ferror`) then printed error 29 instead of the expected 40;
+  kept 40 there.
+- After the fix: LINE INPUT gives error 2 / 29 like INPUT; full build, all tests pass.
+- **B4 found:** with `ON ERROR GOTO 100`, every error (also a plain `ERROR 5`) ends
+  in an address error at 0x9c0001. `prolog2()` in `lang/basic/src/gencode.c` calls
+  `__setjmp(env, savemask)` with the return address pushed first (as
+  `cemcom.ansi/eval.c` does for C) but no `savemask`; `__setjmp`
+  (`libcc.ansi/core/setjmp/setjmp.e`) takes the return address from
+  `PSIZE+WSIZE`. Tried in the scratch clone only (no go-ahead yet): `C_loc(0)`
+  before `env` and `asp` 2 pointers + 1 int; `ERROR 5`, INPUT and LINE INPUT at the
+  end and with stdin closed all print "caught <n>"; full build, all tests pass.
