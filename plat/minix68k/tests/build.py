@@ -48,22 +48,28 @@ test(
 # and be caught by the BASIC runtime's signal handlers; on minix68k it is an
 # EM trap (7, EFDIVZ) that is not turned into a signal (B1 in Tasks.md).
 # test26 prints hex(-1)/oct(-1): 16 bits here, so its own expected output.
+# onerror (our own): LINE INPUT at the end of stdin (B3) caught by ON ERROR
+# (B4), then an error in the handler, which ends the program.
 BASIC_SKIP = {"test17", "test18"}
 BASIC_EXPECTED = {"test26": "./basic/test26.b.g"}
 BASIC_DIR = "lang/basic/test"
+BASIC_OWN = {"onerror": "plat/minix68k/tests/basic"}
 
 basic_tests = []
-for expected in sorted(glob(f"{BASIC_DIR}/*.b.g")):
+for expected in sorted(glob(f"{BASIC_DIR}/*.b.g")) + [
+    f"{d}/{n}.b.g" for n, d in BASIC_OWN.items()
+]:
     name = basename(expected)[: -len(".b.g")]
     if name in BASIC_SKIP:
         continue
+    srcdir = BASIC_OWN.get(name, BASIC_DIR)
     basic_tests.append(
         test(
             name=f"basic_{name}_test",
             ins=[
                 "./basic.sh",
                 "plat/minix68k/emu",
-                f"{BASIC_DIR}/{name}.bas",
+                f"{srcdir}/{name}.bas",
                 BASIC_EXPECTED.get(name, expected),
             ],
             deps=glob(f"{BASIC_DIR}/tst/*") + ["plat/minix68k+all", "+common"],
