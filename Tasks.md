@@ -16,16 +16,21 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   lines stay the same. minix68k runs the `floats` set (46/46 pass); a bit-exact
   comparison with host gcc matches except `sqrt` (1 ulp, libm).
 - [ ] **F1b — soft-float is not IEEE-exact** (Kahan's Paranoia, 2026-10-29: ACK
-  minix68k "Satisfactory though flawed", host gcc "Excellent"). From
-  `mach/proto/fp`: `*`, `/`, `+`, `-` are "neither chopped nor correctly rounded",
-  sticky bit wrong; overflow saturates at the largest number (no infinity);
-  "unbalanced range" at the underflow threshold. From ACK's C library: `sqrt` not
-  correctly rounded (-0.60 to +0.50 ulp), `pow(0,0)` gives 0 (should be 1), `printf`
-  `%.17e` prints only 16 digits. Paranoia (T10) tolerates the 2 FLAWs via `MAX_FLAWS`
-  in `plat/minix68k/tests/paranoia.sh`. Usable (BBC BASIC etc.), but results can differ
-  from other machines in the last bit. Options: fix rounding/infinity in
-  `mach/proto/fp`, or use another soft-float (e.g. Berkeley SoftFloat) built for
-  16-bit `int`; fix `pow`, `sqrt`, `printf` precision in `lang/cem/libcc.ansi`.
+  minix68k "Satisfactory though flawed", host gcc "Excellent").
+  - [x] Step 1 (2026-10-30): rounding of `+ - * /` (double and float) and
+    double→float. `mach/proto/fp` had no sticky bit (alignment, subnormals, the
+    product's low half, the division remainder were dropped; `*` rounded twice;
+    float rounding ignored `m2`): 56 in 100,000 cases were 1 ulp low. Fixed with
+    `b64_jsft()` and sticky bits; test `fp_test` (`fpgen.c` on the host,
+    `fpcheck.c` in the emulator, 30,000 cases incl. subnormals) and Paranoia's
+    rounding and sticky-bit checks pass; `MAX_FLAWS` 2 → 1.
+  - [ ] Step 2: infinity, NaN, -0. `extend()` treats exponent 2047 as a number
+    (overflow gives infinity's bits, which then act as 2^1024), knows no NaN, and
+    makes -0 +0. Paranoia's last FLAW ("unbalanced range": its `V` is infinity).
+    Also: operations, `cmf`, `cfi`/`cfu` with them; test cases in `fpgen.c`.
+  - [ ] Step 3: ACK's C library: `sqrt` not correctly rounded (-0.60 to +0.50 ulp),
+    `pow(0,0)` gives 0 (should be 1), `printf` `%.17e` prints only 16 digits and
+    infinity as 1.797693134862316e+308.
 - [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
   (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
   expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;

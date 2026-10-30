@@ -313,3 +313,59 @@ User:
   with the message; default `make` builds and tests minix68k; `make PLATS="minix68k
   pc86"` regenerates and builds pc86 too; `make` again regenerates without pc86 (0
   pc86 targets in build.ninja); a further `make`: no regeneration, "no work to do".
+
+### F1b, 1: soft-float rounding (investigation; fix tried in a scratch clone)
+
+User:
+> i pushed (CI for `60825654f` passed: clang 85 s, build-linux 86 s, sanitizers 104 s)
+> start with F1b
+
+- Only `mach/m68k2/libem` uses `mach/proto/fp` in this fork. C programs ignore the
+  float overflow/underflow traps (`head_ac.e`: `sim` 1336), so overflow gives the
+  bit pattern of infinity without a trap.
+- Differential test (scratch, TestFloat-style): host program `gen.c` writes cases
+  `op a b result` (double and float `+ - * /`, double→float, long→double; random
+  bits, mantissas with many trailing zeros or ones for exact ties, close and far
+  exponents; a second mode with subnormal operands and results), the result from
+  host IEEE arithmetic; `check.c`, built with ACK for minix68k, recomputes them in
+  the emulator (about 3,700 cases/s) and prints every difference.
+- Old code: 18 of 20,000, 56 of 100,000 normal cases, 14 of 30,000 subnormal cases
+  differ, every one 1 ulp too low (an above-half case rounded as a tie, to even).
+  Causes: no sticky bit anywhere.
+  - `compact()` float: rounding looked only at `m1`, not `m2` (seen in double→float);
+  - `sft_ext()` (alignment for `+`/`-`) and the subnormal path in `compact()`
+    (`b64_rsft` + `b64_sft`) dropped the bits shifted out;
+  - `mul_ext()` rounded the 128-bit product at bit 64 (half up) and dropped the
+    rest: two roundings;
+  - `div_ext()` (bit loop, `USE_DIVIDE` not defined) dropped the remainder.
+- Fix tried (scratch clone only): `b64_jsft()` in `shifter.c`, a right shift that ORs
+  the lost bits into bit 0 (renamed `.b64_jsft` by `massage_s.lua`), used in
+  `sft_ext()` and for subnormals in `compact()`; `compact()` float rounding counts
+  `m2 != 0`; `mul_ext()` ORs the low 64 bits of the product into bit 0 instead of
+  rounding; `div_ext()` sets bit 0 when 64 quotient bits leave a remainder. At least
+  11 (double) or 40 (float) bits lie below the result, so one sticky bit is enough.
+- Result: 0 of 20,000 + 100,000 normal and 0 of 30,000 subnormal cases differ; full
+  build, all tests pass. Paranoia: "Multiplication/Division/Addition/Subtraction
+  appears to round correctly", "Sticky bit apparently used correctly"; FLAWs 2 → 1.
+- The remaining FLAW, "unbalanced range; UfThold * V = 4.000000000000001": Paranoia's
+  `V` is `7ff0000000000000`, infinity (host: `7fefffffffffffff`). Overflow already
+  gives infinity, but `extend()` treats exponent 2047 as an ordinary number
+  (2^1024), so arithmetic on infinity gives finite results and Paranoia's search
+  for the overflow threshold ends at infinity. NaN is not known either, and
+  `extend()` turns -0 into +0. `printf` prints infinity as 1.797693134862316e+308.
+
+### F1b, 2: step 1 applied (rounding), with a test
+
+User:
+> yes apply step 1
+
+- The scratch fix applied unchanged to `mach/proto/fp` (`shifter.c`, `FP_types.h`,
+  `massage_s.lua`, `sft_ext.c`, `compact.c`, `mul_ext.c`, `div_ext.c`).
+- Test `fp_test` (`plat/minix68k/tests`): `fpgen.c` (host program, the scratch
+  generator), `fpcheck.c` (minix68k, the scratch checker), `fpcheck.sh` runs seed 1
+  with 20,000 normal cases and seed 2 with 10,000 subnormal cases (about 8 s) and
+  fails on any difference, printing the first 20. `paranoia.sh`: `MAX_FLAWS` 1.
+- Checked: fresh clone, full build: all tests pass (`fp normal: 20000 cases, 0
+  differ`, `fp subnormal: 10000 cases, 0 differ`). With the old `mach/proto/fp`:
+  `fp_test` fails (18 differ) and `paranoia_test` fails (flaws=2, max 1). `fpgen`
+  with ASan+UBSan (strict) and with clang: no reports, identical output.
