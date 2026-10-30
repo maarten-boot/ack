@@ -1018,6 +1018,10 @@ User:
 - Fork (`make`, minix68k): exit 0, 100 tests (99 plus volatile), no `@@FAIL`,
   fold seeds 1-3 0 wrong.
 
+- User: "yes make the upstream branch". `upstream/volatile-nop` at 7afa32a0a
+  with b3dab863c cherry-picked (no conflicts): c1042edd0. Same change as the
+  tree built above with `PLATS = all` (197 tests, no `@@FAIL`).
+
 #### upstream/volatile-nop — powerpc and mcg: accept the nop emitted after a volatile access
 
 - cemcom.ansi emits an EM `nop` after every volatile access
@@ -1037,3 +1041,6 @@ User:
   linuxmips, which have no test runner.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- User pushed and opened the PR: `upstream/volatile-nop` at c1042edd0 is
+  davidgiven/ack#382, "powerpc and mcg: accept the nop emitted after a volatile
+  access". Open upstream PRs from the fork now: #375-#382.
