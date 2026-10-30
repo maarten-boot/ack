@@ -607,3 +607,70 @@ linux68k, pc86, cpm and linuxppc.
 
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+### P2: the minix project builds this fork (proposal; checked in a scratch copy)
+
+User:
+> start with P2
+
+Read-only look at `../minix-st-2.0.4/src/rosco/ack` (nothing changed there):
+`build-ack.sh` clones davidgiven/ack at `7afa32a0a` and applies
+`ack-minix68k.patch`; `Makefile` (host, lib, pass, ccproto) uses
+`ack/.obj/staging`, `mkpass.py` builds the passes as Minix programs from the target
+paths in `ack/.obj/build.ninja`; `acc-minix` links `crtso.o emrts.o <objects>
+libc.a libem.a libend.a` (Minix's C library, ACK's libem/libend).
+
+- The patch is all in this fork: `mach/m68020/ncg/mach.c`, `mach/m68k2/as/mach1.c`,
+  `mach5.c`, `plat/minix68k/cv/cv.c` identical (`git apply -R --check`);
+  `Makefile` (PLATS/DEFAULT_PLATFORM) and `maketempfile.c` (Minix, plus F7) in
+  another form. The fork changed no target paths `mkpass.py` uses.
+- Upstream's m68k2 libem has `fp68881.s`: float code on the board would run 68881
+  instructions (F-line trap on the 68010). The fork's libem has the soft-float.
+- Proposed change (for the project's owner), `src/rosco/ack`:
+  - `build-ack.sh`: `ACK_URL` https://github.com/maarten-boot/ack.git, `ACK_REV`
+    `14fca33720e16be2ffb1509cd35c90e12b2a30f2` (tag minix68k-20261030), no
+    `git apply`; header comment: what the fork includes, that `make` also runs the
+    minix68k tests (a few minutes, coreutils `timeout`), remove `ack/` to change
+    revision;
+  - `Makefile`: `$(STAGING)/bin/ack: build-ack.sh` (no patch dependency);
+  - delete `ack-minix68k.patch`.
+- Checked in a scratch copy (`include`, `src/lib`, `src/rosco/{lib,include,ack}`,
+  the `src/{fs,mm,kernel}` headers): the changed `build-ack.sh` with `ACK_URL` =
+  this repository builds the fork; `make -C lib` builds Minix 2.0.4's `libc.a`,
+  `crtso.o`, `emrts.o` without errors; a float program linked as `acc-minix` does
+  (plus the pieces below) runs in this fork's emulator and prints the same as the
+  host (1/3, a sum of 1000 terms, 0.1+0.2 == 0.3).
+- Found in that check:
+  - **cpp.ansi overflow (this repo, all platforms):** `preprocess.c` writes `#line`
+    directives into `char Xbuf[256]` with `sprintf`; a source or header path of
+    about 240+ characters aborts the preprocessor ("buffer overflow detected"; the
+    scratch copy's long paths made 4 `cv_test` cases fail). `replace.c`'s
+    `FilNamBuf[PATHLENGTH]` for `__FILE__` lacks room for the two quotes and the NUL.
+    Not fixed yet (needs a go-ahead).
+  - **minix project:** its `lib/Makefile` puts only the stubs `fphook/fltpr.o` and
+    `strtod.o` ("cannot print floating point") into `libc.a` and builds no float
+    library from `fphook/fphook.c`, and leaves out `src/lib/math` (`ldexp`,
+    `hugeval`, `isnan`; its `frexp.s` is i86/i386 only, ACK's `frexp.e` works): no
+    program on the board can printf a float today, whichever ACK. Its `ncrtso.s`
+    does not ignore the float traps as ACK's C start-up does (`sim` 1336), so a
+    float overflow ends the program ("trap 4") instead of giving infinity.
+
+### A container for the ACK
+
+User:
+> for compiling the minix and the bbc code we could host the ack in a docker
+> container, minix itself will add the ack c compiler to its tree for development
+> inside minix, am i right ?
+> yes write the Dockerfile
+
+- Two uses: the cross compiler on Linux (bbcbasic needs only the staging tree; the
+  minix project's `mkpass.py` also needs the source and build tree with
+  `build.ninja`), and the passes built as Minix programs (by `m68k-elf-gcc -mshort`
+  in the rosco toolchain container) that the minix project puts on the SD card,
+  linked with Minix's libc and this fork's libem/libend.
+- `plat/minix68k/docker/Dockerfile`: `debian:trixie-slim` pinned by digest
+  (`sha256:f6b08b09…`, 2026-10-27); bison, flex, gcc, git, lua5.4, make,
+  ninja-build, python3; clones `ACK_URL` (default this fork) at `ACK_REV` (default
+  tag `minix68k-20261030`), `make` (builds and runs the minix68k tests), keeps
+  `/opt/ack` whole; `ACKDIR` and `PATH` set, `minix68k-emu` on the path, workdir
+  `/src`. Committed before the first test build finished (user's request).
