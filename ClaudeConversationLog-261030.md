@@ -940,8 +940,45 @@ User:
     and with exact values: `+ - * /` of double and float, float precision of
     float constants, `0.1 + 0.2 == 0.30000000000000004`, ties rounded to even
     and subnormal results. With the compiler before this PR, 20 of its 26
-    checks fail.
+    checks fail. Operands are plain globals, not volatile: the powerpc ncg
+    table has no pattern for the `nop` cemcom.ansi emits after a volatile
+    access (a separate fix).
+- **linuxppc emulator (first commit):** constfold is the first test that
+  multiplies, or does single-precision arithmetic, at run time on linuxppc,
+  and the emulator (`plat/linuxppc/emu/instructions.dat`) could not run it.
+  `fmul` was decoded as X-form with FRB, but it is A-form with FRA and FRC
+  (as the assembler, `mach/powerpc/as/mach3.c`, encodes it): any multiply
+  with FRC not f0 stopped with "unimplemented instruction", and one that
+  matched computed FRA × FRB. `fadds`, `fsubs`, `fmuls` and `fdivs`
+  (opcode 59) were missing; they compute in double and round to float,
+  which is exact for these operations.
 - **Not changed:** the back ends' `float_cst` (`h/con_float`) still rounds
   half-up when it converts the constant text; the constants it now gets are
   already rounded, so that has no effect on IEEE targets. The Modula-2 front end
   folds with flt_arith too and is not changed here.
+- Four-platform build of `upstream/float-fold` (cpm linux68k linuxppc pc86):
+  exit 2. linuxppc cannot compile `constfold,e,.c`: "No table entry for 86"
+  (`op_nop`). cemcom.ansi emits `nop` after a volatile read (`eval.c:732`) and
+  `mach/powerpc/ncg/table` has no `pat nop`; every other ncg table has one. Not
+  caused by the float changes: `volatile int v; int f(void){return v;}` fails the
+  same way. No other test in tests/plat uses volatile. The fork's CI builds only
+  minix68k (m68020 has `pat nop`), so rosco-minix68k is not affected. The user
+  had already pushed `upstream/float-fold` (f798121cc); the PR is not opened.
+- User: "yes apply" (proposal: constfold without volatile; powerpc `nop` as new
+  task N12, a separate upstream fix). `constfold,e,.c`: operands and results in
+  plain globals (cemcom.ansi does not carry a global's value into a constant).
+  N12 added to Tasks.md.
+- Rerun: constfold now compiles on linuxppc but the emulator stops at
+  `0xfc8300b2` (opcode 63, `fmul`): `instructions.dat` decodes fmul as X-form
+  with FRB, while it is A-form with FRA and FRC (`mach3.c:626`). After that,
+  `0xec62082a` (opcode 59, `fadds`): no single-precision arithmetic at all.
+  No earlier tests/plat test multiplied or did float arithmetic at run time.
+- User: "yes apply" (proposal: emulator fix as its own commit, in the fork and
+  as the first commit of `upstream/float-fold`; rebuild the branch; force-push).
+  `instructions.dat`: fmul as `<63--><FRT><FRA>.....<FRC><25->`, and fadds,
+  fsubs, fmuls, fdivs (opcode 59) computed in double and rounded to float.
+- Clean four-platform build (worktree at f798121cc plus the emulator fix and the
+  new constfold): exit 0 in 4m13s, no `@@FAIL`, 195 tests (the 193 of the
+  baseline plus `modules/src/flt_arith+test` and linuxppc constfold).
+  constfold without volatile also passes on minix68k (scratch build).
+- PR text above updated (constfold without volatile, the emulator commit).

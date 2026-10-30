@@ -289,6 +289,11 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 - [ ] **N11 — file names are not escaped in line directives and `__FILE__`.**
   `cpp.ansi` writes the name between quotes as it is, so a `"` or `\` in a file
   name gives a broken string. Old; rare on Linux.
+- [ ] **N12 — powerpc ncg cannot compile a volatile access.** cemcom.ansi emits
+  `nop` after reading a volatile (`eval.c`), and `mach/powerpc/ncg/table` has no
+  `pat nop` (every other ncg table has one): `volatile int v; int f(void){return
+  v;}` gives "No table entry for 86" on linuxppc. Fix: `pat nop` in the table,
+  plus a tests/plat test that uses volatile. Upstream, after float-fold.
 - [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
