@@ -478,3 +478,128 @@ User:
   10,000, special 11,601: 0 differ; Paranoia "Excellent"). `fpgen` with ASan+UBSan
   and with clang: no reports, identical output in all 3 modes.
 - `Tasks.md`: F1b done; new F1c (17th printf digit, see step 3).
+
+### Upstream branches
+
+User:
+> i pushed (CI for `14fca3372` passed: build-linux 109 s, sanitizers 259 s, clang 104 s)
+> start with the upstream branches
+> leave out the minix68k it is for version1 which i expect nobody is using, we can
+> always point to my fork for interested parties
+> keep it, reword the message (tests-plat-wordsize)
+> yes fetch the branches
+> yes put the PR texts in the log
+
+- Upstream `default` (davidgiven/ack, `git ls-remote`) is still `7afa32a0a`, this
+  branch's fork point. Upstream has `plat/minix68k` and `mach/m68k2/libem`, but no
+  `mach/proto/fp` build and no minix68k tests; its tests run on cpm, linux68k,
+  linuxppc, pc86. Decision: only generic fixes go upstream; the minix68k series
+  stays in the fork (memory: upstream-scope).
+- Branches made in a scratch clone by cherry-pick (no `-x`: its line would follow
+  the Co-Authored-By trailer), then fetched into this repo:
+  `upstream/libc-fixes` (889c16e4f, f39e6910a), `upstream/ego-fixes` (34019b8ff,
+  76abdb282), `upstream/ub-fixes` (a648a2838, b5c8d7cbe, a8c7ee66e, 80fc1fa37
+  without its `basic.g` line, 47dc594be, ddb15dd2c, 6ba184220, 01f77a5d4),
+  `upstream/basic-fixes` (4c4cafd9a, b9831450b, 8a2103d9b, 78ab6e78d, 94be27f74,
+  without their `plat/minix68k/tests` parts; the DATA commit takes the `"%s"` fix
+  for its rewritten line and says so; the ON ERROR commit shows a 3-line BASIC
+  example instead of the fork's test), `upstream/tests-plat-wordsize` (1159d464e,
+  message reworded without minix68k). All five merge together without conflicts
+  and contain no fork-only files.
+- Full upstream builds (`PLATS = all` and upstream's tests): the first attempt of
+  the baseline and the combined build in parallel ran out of `/tmp` inodes; rerun
+  one after the other (result below when done).
+- PR texts (for the user to open the PRs):
+
+#### Upstream PRs (davidgiven/ack, base `default`)
+
+Each branch is based on `default` at 7afa32a0a and is independent; all five
+merge together without conflicts. Found while making the minix68k target
+usable in my fork (https://github.com/maarten-boot/ack, branch
+`rosco-minix68k`); only the generic fixes are offered here.
+
+
+#### upstream/libc-fixes — libcc.ansi: printf buffer overflow, exact sqrt, pow(x, 0), inf/nan, fflush
+
+- **printf overflowed its number buffer.** Since 53a3630d2 numbers are
+  rendered into `static char buf[16]`, and float precision is cut to 15 to
+  fit. But `%f` of DBL_MAX is 316 characters, `%f` of 1e30 38, `%.15e` 23,
+  `%lb` 32, `%.30d` 30: all written past the buffer. `printf("%f",
+  DBL_MAX)` crashed a program. The buffer now has room for `%f` of the
+  largest long double with 128 digits after the point (static, about 440
+  bytes with 8-byte doubles, so still nothing on the stack); precision is
+  cut to 128 for floats and integers. `%.17e` gives the 18 digits asked for.
+- printf prints infinity and NaN as `inf`, `-inf`, `nan` (`INF`/`NAN` for
+  `%E`/`%G`).
+- `pow(x, 0)` is 1 for every x, 0 included (C99, IEEE 754).
+- `sqrt` is correctly rounded: an exact integer square root of the mantissa
+  (two bits at a time, in pairs of 32-bit words, no byte order assumed)
+  replaces Newton's method (errors of -0.60 to +0.50 ulp). Checked against
+  glibc: 0 differences in 4,000,000 random values (subnormals included) and
+  600,000 values at and next to perfect squares.
+- `fflush()` on a stream being read must give the unread buffered bytes
+  back to the file, but seeked forward over them instead of back: they were
+  skipped (since d87444a7f, 1990). The BASIC runtime flushes before every
+  READ, so with DATA in a file every second DATA line was lost.
+
+With these (and correct soft-float arithmetic in my fork) Kahan's Paranoia
+says "Excellent", as on the host.
+
+#### upstream/ego-fixes — ego: inliner lost functions at -O4; cs NULL dereference
+
+- **il:** `cl_flags` holds bit flags (CLF_SELECTED 020, CLF_EVER_EXPANDED,
+  CLF_FIRM, the parameter count) but was declared `bool`; since "Use stdbool
+  throughout" (0782bc80e) that is a `_Bool`, so `SELECTED()` stored 1 and
+  `IS_SELECTED()` never matched. `cleancals()` then dropped every selected
+  call after `singles()` had marked the callee for removal: at -O4 and up a
+  static function called once lost its body while the call stayed
+  ("Undefined: __II0" at link time). Now `byte`.
+- **cs:** `gains()` looked at the instruction before an "addressing mode"
+  expression; when the expression starts a basic block that is NULL (seen
+  with `adp 1` in tests/plat/core/exg). It is now not eliminated.
+
+#### upstream/ub-fixes — undefined behaviour and robustness fixes (host tools)
+
+Found with ASan/UBSan and clang builds of the host tools running the tests:
+
+- em_opt looked up pseudo-instructions in `em_flag[]`, which only covers
+  instructions (read 25 bytes past the table; whether `sp_cend` was written
+  depended on the bytes after it);
+- signed shifts that are undefined (LLgen sets, both `arith.h`, the
+  `cstoper.c` files, peephole, fillem, cset, Musashi);
+- tabgen's `getln()` wrote before its buffer on a long line;
+- printf formats: argument types, and text passed as the format (a `%` in a
+  name or source line was read as a conversion);
+- a two-statement macro, misleading indentation, negative shifts;
+- tables indexed with (signed) `char`;
+- m2: two `!a & b` meant as `!(a & b)` (a missed "statement not reached");
+- Makefile: build the host tools with `-fno-strict-aliasing`: the C front
+  end type-puns its free lists (modules/src/alloc/alloc.h) and the Modula-2
+  front end its set reference counts (lang/m2/comp/chk_expr.h), which
+  clang -Os already miscompiles.
+
+#### upstream/basic-fixes — ACK BASIC: ON ERROR, LINE INPUT, ^, DATA
+
+- **ON ERROR GOTO jumped to a garbage address:** the program prologue called
+  `__setjmp(env, savemask)` without `savemask`, so the return address was
+  read from the wrong place.
+- **LINE INPUT at the end of stdin** recursed (with "?Redo") until the stack
+  was gone; now error 2 / 29 like INPUT.
+- **`^` computed exponent ^ base** since the 2013 rewrite (`n ^ .5` gave
+  `.5 ^ n`).
+- **DATA kept in the program:** the compiler wrote DATA to `<source>.bas.d`
+  and every program opened that file at start-up by its compile-time name, so
+  a BASIC program only ran where it was compiled (examples/hilo.bas: "File
+  not found"). Now the DATA text is emitted as a rom string and READ/RESTORE
+  read it there.
+- The DATA file name was emitted as a pointer instead of its length.
+
+#### upstream/tests-plat-wordsize — tests/plat: word-size and byte-order clean
+
+aar, cii, inn and rck assumed EM_WSIZE == EM_PSIZE or a little-endian
+machine (pointer compares with the word size, expected values built for
+little-endian, a 4-byte argument to fail()). Results unchanged on
+linux68k, pc86, cpm and linuxppc.
+
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
