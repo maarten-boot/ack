@@ -866,3 +866,23 @@ User:
   (56 bits) instead of `3.00000000000000044e-1`; the float is unchanged.
 - Full `make PLATS=minix68k` in a fresh scratch copy: exit 0, 97 tests (paranoia,
   fp, BASIC, cv, cpp.ansi, flt_arith included), no `@@FAIL`.
+
+### F1d step 3: tests
+
+- User: "start with step 3" (plan given), then "yes apply step 3".
+- Generic test `tests/plat/floats/constfold,e,.c` (floats set: linuxppc upstream,
+  minix68k here), test library only: folded constants compared with the same
+  expression from volatile operands at run time (`0.1 + 0.2`, the probe's
+  wrong + - * / cases, double and float), float precision (`(double)0.1f`,
+  `0.1f * 3.0`, `0.1f == 0.1`, `0.5f == 0.5`), the exact `0.1 + 0.2`, ties
+  (`9007199254740993.0`, `9007199254740995.0`, `16777217.0f`,
+  `(float)16777217L`, `(float)16777219L`) and subnormal results. Values stored in
+  volatiles so the comparisons are not folded. Passes on minix68k; with the
+  compiler before step 1 (f4bef8f2b) 20 of its 26 checks fail (lines 22-32,
+  35-37, 41, 42, 45, 47, 48, 53).
+- Fork test `plat/minix68k/tests/fold.sh` + `foldgen.py`, rule `fold_test` (in
+  `tests`): the scratch probe made permanent, 300 random pairs per seed (seeds
+  1-3), literals and folded + - * / as double and float, now with tiny literals
+  for subnormal results (about 34 double and 43 float subnormal results and 160
+  zeros per seed); bits compared with Python's IEEE values. 8,793 constants,
+  0 wrong.
