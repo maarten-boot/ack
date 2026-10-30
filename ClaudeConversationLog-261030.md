@@ -1163,3 +1163,68 @@ User:
   holds the tool, smoke test ok.
 - Fresh full `make` (minix68k): exit 0 in 1m41s, 101 tests (100 plus
   `m68kcheck_test`), no `@@FAIL`.
+
+### T7: differential tests (investigation)
+
+- User: "start with T7". Scratch generator `t7/diffgen.py` (seeded): random C
+  functions over int8/16/32 and uint8/16/32 (`<stdint.h>`): arithmetic in
+  32-bit types with every result converted back to its type (so the size of
+  `int` does not matter), plus native 8/16-bit operations of one type (the
+  16-bit int code of minix68k), guarded `/` `%` (no division by 0, no
+  INT_MIN/-1), shifts with masked counts, comparisons, `!`, `?:`, `&&`/`||`,
+  casts; leaves are globals, parameters, locals and literals (so constant
+  folding too); loops, `switch`, arrays, a struct (copies, `->`), stores to
+  globals. Same source with gcc `-O1 -fwrapv` on the host and ACK for minix68k
+  at O0, -O, -O2, -O3, -O4 (emulator); outputs compared. Optional trace mode
+  prints every local.
+- First 200 seeds: 20 differed. Nine bugs found, each reduced to a small case
+  and fixed in the scratch tree (not in the repo yet):
+  1. **ncg m68020 table, `WORD_SIZE==2`, TESTS**: an `extend1` token (a byte
+     from `seq`/`sne` + `neg.b`, not yet extended) matched the `tst.w` rule
+     (`test_set2` includes `extend1`), so the stale upper byte decided the
+     test. `(uint16_t)(!(int32_t)(uint16_t)x) == 0` with x = 0x12300 is false.
+     Fix: `to test test_set2+extend2-extend1` (falls to `tst.b`). minix68k only.
+  2. **cemcom.ansi `ch3mon.c`**: unary `-` of an unsigned constant was not cut
+     to the type's size (`~` was), so `-(unsigned long)1371337135UL /
+     193754694UL` folded with the 64-bit value: 717414569 instead of 15.
+     Fix: mask both `-` and `~` for unsigned types. All targets.
+  3. **ncg m68020 table, COERCIONS `from memory1`** (`clr` + `move.b` into a
+     data register): `move.b` sets the condition codes for the byte, but ncg
+     takes them for the register, so `loc dvi` by a power of two used `bpl`
+     on the byte sign: `(uint8_t)l0 / 16` with l0 = -300 gave 14, not 13.
+     Fix: `killcc.` after the `move.b`. All m68k targets with this table.
+  4. **em_opt `peephole.c` `repl_mul`** (`-ml`: minix68k, linux68k): the
+     multiplier was read into a 64-bit `unsigned long`, so `ldc -1 mlu 4` had
+     64 one bits and became a shift by 64 (a no-op on the 68000): `x *
+     0xFFFFFFFFUL` was 0. Fix: mask `n` to `8*sz` bits. All targets using
+     `-ml` on a 64-bit host.
+  5. **ncg m68020 table `txxand`, `txxand_ouch`, `cmxtxxand`** (`tXX and`,
+     `cmX tXX and`): `x & (a op b)` was done as "clear bit 0 of x if false",
+     right only if x is 0 or 1 (Pascal booleans); in C `x & (y != 0)` with
+     x = -8017 gave -8017. Fix: `and #1,x` first, `clr x` if false. 12 sites.
+     All m68k targets.
+  6. **ncg m68020 table, `WORD_SIZE==2`, `cmu`/`cmi 4`**: `.cmu` leaves its
+     result in d1, but the pattern yielded nothing (the result was then taken
+     from the stack) and neither pattern had `kills ALL`. Only seen when ego's
+     CS keeps a `cmu 4` result in a local: a guarded division divided by 0 at
+     -O3. Fix: `kills ALL` and `yields d1`. minix68k only.
+  7. **em_opt patterns, constant folds without a range check**: `loc loc adu`,
+     `sbu`, `mlu`, `sli`, `slu` and `ldc loc sli/slu` produced constants that do
+     not fit the word (`loc 12933 loc 20802 mlu 2` -> `loc 269032266`; the
+     assembler then says "too big" on `divu.w #269032266`). Seen at -O3 (ego
+     propagates constants). Fix: `&& (sfit(r) || ufit(r))`. All targets.
+  8. **ncg m68020 table, `WORD_SIZE==2`, `loc loc ciu/cui/cuu` 2->4**: zero
+     extension clears a 4-byte register and moves the word into its low half,
+     but MOVES puts small constants into a D_REG with `move.l`/`moveq`, so the
+     upper half became the sign: `(uint32_t)(uint16_t)-1` was 0xFFFFFFFF.
+     Fix: a constant alternative `yields {const4, %1.num & 65535}`. minix68k.
+  9. **em_opt patterns `loc loc loc cii/ciu`**: `loc $1 loc $2 loc w cii` with
+     `$2<w` folded to `loc $1` without sign-extending the low `$2` bytes
+     (`(int8_t)16384` stayed 16384 after ego's UD propagated the constant);
+     the word->double-word folds had the same gap for `loc` operands in
+     unsigned form (`loc 45219`). Fix: `sfit($1,8*$2)` / `sfit($1,8*w)`.
+     All targets.
+- With all nine fixes: seeds 1-1000 all equal at all five levels (before the
+  last three: 4 left, all -O3/-O4). ego phases bisected for (9) with a scratch
+  `EGO_PHASES` hack in em_ego (not for the repo; em_ego's own `uphases`
+  are never filled).
