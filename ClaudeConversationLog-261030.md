@@ -167,3 +167,30 @@ User:
   types) was not reached by my test.
 - `.github/workflows/ccpp.yml`: third job `build-linux-clang` (apt `clang`, `make
   CC=clang HOSTCC=clang`). Fresh clones with all changes: gcc 92/92, clang 92/92.
+
+### Small leftovers, 2: E6, ego's inliner at -O4
+
+User:
+> i pushed (CI for `9bab97f62` passed: build-linux 78 s, sanitizers 96 s, clang 64 s)
+> start with E6
+
+- Reproduced (`make ACKCFLAGS=-O4`): `read.o` in `libbasic.a` references `__II2` and
+  `__II3`, the names of its own static functions, as undefined; at `-O3` the object
+  has 12 procedures, at `-O4` 10: `_datint`/`_datflt` (each called once) were
+  removed, the `jsr __II2`/`jsr __II3` in `_readint`/`_readflt` stayed.
+- A 20-line C reproducer (two static functions, each called once inside an `if`)
+  does the same; `em_ego -Q` reports "inline substitutions: 0". An inliner built with
+  `VERBOSE` says "singles: procedure 1 can be removed" for both; in gdb the callers'
+  `P_CALS` lists are empty in pass 3 although `select_calls()` had marked the calls
+  selected.
+- gdb prints the call's `cl_flags` as `false`/`true`: `cl_flags` is `bool`. It holds
+  bit flags (CLF_INLPARS 017, CLF_SELECTED 020, CLF_EVER_EXPANDED 040, CLF_FIRM
+  0100), declared `bool` in 1984 when ego had `typedef byte bool`; the 2025 stdbool
+  commit (`0782bc80e`) replaced that typedef by `_Bool`. `SELECTED()` stored 1,
+  `IS_SELECTED()` (`& 020`) gave 0, `cleancals()` dropped the call, and the callee,
+  already marked dispensable by `singles()`, was removed. The other `bool` fields
+  in ego are real yes/no values. Fixed: `byte cl_flags`.
+- Checked: the reproducer has no undefined names and reports 2 substitutions; clean
+  builds of everything (libraries, examples, tests) at `-O4` and `-O6`: all 92
+  minix68k tests pass; the normal build is byte-identical before and after (107
+  programs/objects, 521 archive members).

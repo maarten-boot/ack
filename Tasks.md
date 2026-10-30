@@ -218,11 +218,16 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
   to `unsigned char` in the class macros.
-- [ ] **E6 — ACK's own libraries cannot be built at `-O4`.** With `ACKCFLAGS=-O4`
-  (also without a machine description) the examples fail to link: "Undefined:
-  __II0, __II5" — names ego's inliner (IL) makes for local procedures, referenced
-  across library modules. The normal build uses `-O`; user programs at `-O4`/`-O6`
-  against the normal libraries are fine (see E5).
+- [x] **E6 — ego's inliner removed functions but kept their calls at `-O4`** (fixed
+  2026-10-30, all platforms). `struct call`'s `cl_flags` (`util/ego/il/il.h`) holds
+  bit flags (`CLF_SELECTED` 020, `CLF_EVER_EXPANDED` 040, `CLF_FIRM` 0100, the number
+  of inline parameters in the low 4 bits) but was declared `bool`: ego's old
+  `typedef byte bool`, which the 2025 "Use stdbool throughout" commit (`0782bc80e`)
+  made a real `_Bool`. `SELECTED()` then stored 1, `IS_SELECTED()` tested `& 020` and
+  got 0, so `cleancals()` dropped every selected call while `singles()` had already
+  marked the callee dispensable: the function body was removed, the call stayed
+  ("Undefined: __II0"). Now `byte cl_flags`. Every program at `-O4`+ with a static
+  function called once was affected, not only ACK's own libraries.
 - [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
