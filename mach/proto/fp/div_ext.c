@@ -243,6 +243,11 @@ EXTEND	*e1,*e2;
                 INEXACT();
 #endif
 	e1->mantissa = result;
+#ifndef USE_DIVIDE
+	/* all 64 quotient bits done and a remainder left: sticky bit */
+	if (count < 0 && error)
+		e1->m2 |= 1;
+#endif
 
 	nrm_ext(e1);
 	if (e1->exp < EXT_MIN)	{

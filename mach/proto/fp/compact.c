@@ -43,11 +43,8 @@ dbl_over:			trap(EFOVFL);
 				return;
 		}
 		else if (f->exp < DBL_MIN)	{
-			b64_rsft(&(f->mantissa));
-			if (f->exp < 0) {
-				b64_sft(&(f->mantissa), -f->exp);
-				f->exp = 0;
-			}
+			b64_jsft(&(f->mantissa), 1 - f->exp);
+			f->exp = 0;
 			/* underflow ??? */
 		}
 			
@@ -144,11 +141,8 @@ sgl_over:			trap(EFOVFL);
 				return;
 		}
 		else if (f->exp < SGL_MIN)	{
-			b64_rsft(&(f->mantissa));
-			if (f->exp < 0) {
-				b64_sft(&(f->mantissa), -f->exp);
-				f->exp = 0;
-			}
+			b64_jsft(&(f->mantissa), 1 - f->exp);
+			f->exp = 0;
 			/* underflow ??? */
 		}
 
@@ -164,7 +158,7 @@ sgl_over:			trap(EFOVFL);
 #endif
 		        if (((f->m1 & SGL_EXACT) > SGL_ROUNDUP)
 			    || ((f->m1 & SGL_EXACT) == SGL_ROUNDUP
-			        && (f->m1 & (SGL_ROUNDUP << 1)))) {
+			        && (f->m2 != 0 || (f->m1 & (SGL_ROUNDUP << 1))))) {
 				(*SGL)++;
 				if (f->exp == 0 && (*SGL & ~SGL_MASK)) {
 					f->exp++;

@@ -36,6 +36,7 @@ local syms = {
 	"_extend",
 	"_b64_add",
 	"_b64_sft",
+	"_b64_jsft",
 	"_b64_rsft",
 	"_b64_lsft",
 }

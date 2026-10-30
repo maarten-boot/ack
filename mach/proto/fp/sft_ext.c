@@ -35,5 +35,5 @@ EXTEND	*e1,*e2;
 		s = e2;
 
 	s->exp += diff;
-	b64_sft(&(s->mantissa), diff);
+	b64_jsft(&(s->mantissa), diff);
 }

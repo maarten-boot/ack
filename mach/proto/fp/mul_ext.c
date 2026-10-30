@@ -72,13 +72,10 @@ EXTEND	*e1,*e2;
 	 */
 	e1->m1 = ((unsigned long)(result[0]) << 16) + result[1];
 	e1->m2 = ((unsigned long)(result[2]) << 16) + result[3];
-	if (result[4] & 0x8000) {
-		if (++e1->m2 == 0)
-			if (++e1->m1 == 0) {
-				e1->m1 = NORMBIT;
-				e1->exp++;
-			}
-	}
+	/* the low half only as a sticky bit: rounding is done once, by
+	 * compact() */
+	if (result[4] | result[5] | result[6] | result[7])
+		e1->m2 |= 1;
 
 					/* check for overflow	*/
 	if (e1->exp >= EXT_MAX)	{

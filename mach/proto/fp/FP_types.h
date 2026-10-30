@@ -107,6 +107,7 @@ struct fif8_returns {
  void fif8(struct fif8_returns *p, DOUBLE x, DOUBLE y);
 
  void b64_sft(B64 *, int);
+ void b64_jsft(B64 *, int);
  void b64_lsft(B64 *);
  void b64_rsft(B64 *);
  int b64_add(B64 *, B64 *);
