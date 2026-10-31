@@ -593,8 +593,8 @@ xxx  "illegal"	LOCAL:ro,	alterable4:rw:cc	cost(0,0).
 #if WORD_SIZE==2
 /* divs_w "divs.w" data2:ro,	LOCAL:rw:cc		cost(0,56). */
 /* divu_w "divu.w" data2:ro,	LOCAL:rw:cc		cost(0,44). */
-muls_w "muls.w" data2:ro,	LOCAL:rw:cc		cost(0,28).
-mulu_w "mulu.w" data2:ro,	LOCAL:rw:cc		cost(0,28).
+muls_w "muls.w" data2:ro,	LOCAL:rw kills :cc		cost(0,28).
+mulu_w "mulu.w" data2:ro,	LOCAL:rw kills :cc		cost(0,28).
 #endif
 #if TBL68020 && WORD_SIZE!=2
 divs_l "divs.l" data4:ro,	LOCAL:rw:cc		cost(0,90).
@@ -775,8 +775,8 @@ shw  "illegal"	control2:rw:cc				cost(2,4).
 #if WORD_SIZE==2
 divs_w "divs.w" data2:ro,	D_REG:rw:cc		cost(0,56).
 divu_w "divu.w" data2:ro,	D_REG:rw:cc		cost(0,44).
-muls_w "muls.w" data2:ro,	D_REG:rw:cc		cost(0,28).
-mulu_w "mulu.w" data2:ro,	D_REG:rw:cc		cost(0,28).
+muls_w "muls.w" data2:ro,	D_REG:rw kills :cc		cost(0,28).
+mulu_w "mulu.w" data2:ro,	D_REG:rw kills :cc		cost(0,28).
 #endif
 #ifdef TBL68020
 cmp2_l "cmp2.l" address+control4:ro, genreg4:ro kills :cc cost(2,18).
@@ -963,7 +963,7 @@ TESTS
 to test test_set4-(extend2+extend1+extend1_4)
     gen tst_l %1
 
-to test test_set2+extend2
+to test test_set2+extend2-extend1
     gen tst_w %1
 
 to test test_set1+extend1+extend1_4
@@ -1210,7 +1210,8 @@ from memory2
 
 from memory1
     uses DD_REG = {zero_const, 0}
-    gen move_b %1, %a	yields	%a
+    gen move_b %1, %a
+	killcc.			yields	%a
 
 from memory2
     uses DD_REG
@@ -4779,6 +4780,10 @@ with STACK
 pat loc loc ciu	$1==2 && $2==4
 with zero_const
 				yields {zero_const4, 0}
+/* A constant directly: moving it into %a.1 below may use moveq, which
+ * would overwrite the cleared upper word. */
+with consts
+				yields {const4, %1.num & 65535}
 with any
 uses DD_REG4 = {zero_const4, 0}
     gen move %1,%a.1
@@ -4792,6 +4797,8 @@ uses reusing %1, DD_REG4 = %1
     				yields	%a.1
 
 pat loc loc cui	$1==2 && $2==4
+with consts
+				yields {const4, %1.num & 65535}
 with any2
 uses DD_REG4={zero_const4,0}
     gen move %1,%a.1			yields %a
@@ -4801,6 +4808,8 @@ with DD_REG4
 					yields %1.1
 
 pat loc loc cuu $1==2 && $2==4
+with consts
+				yields {const4, %1.num & 65535}
 with any2
 uses reusing %1,DD_REG4
     gen move %1,%a.1
@@ -5487,6 +5496,7 @@ with any2 DD_REG
 
 pat cmi defined($1) && $1==4
 with STACK
+    kills ALL
 	gen jsr {absolute4, ".cmi"}	yields d1
 #else
 /* pat cmi $1==4			leaving sbi 4
@@ -5513,15 +5523,20 @@ with any_int STACK
 */
 
 #if WORD_SIZE==2
+/* .cmu leaves the result in d1 and pops both operands. */
 pat cmu defined($1)
 with STACK
+    kills ALL
     gen move {const, $1},d0
 	jsr {absolute4, ".cmu"}
+			yields	d1
 
 pat cmu !defined($1)
 with any STACK
+    kills ALL
     gen move %1,d0
 	jsr {absolute4, ".cmu"}
+			yields	d1
 #else
 pat cmu defined($1)
 with STACK
@@ -6395,18 +6410,20 @@ pat lil loc sru sil $1==$4 && $2==1 && $3==4	call rlil1shsil("lsr #1,")
 
 proc txxand
 with test_set_int DD_REG
-    gen test %1
+    gen and_i {const,1}, %2
+	test %1
 	bxx[1] {slabel, 1f}
-	bclr {const,0}, %2
+	clr_i %2
 	1:		yields	%2
 #if WORD_SIZE==2
 with test_set1 DD_REG
 #else
 with test_set1 + test_set2 DD_REG
 #endif
-    gen test %1
+    gen and_i {const,1}, %2
+	test %1
 	bxx[2] {slabel, 1f}
-	bclr {const,0}, %2
+	clr_i %2
 	1:		yields	%2
 
 proc txxior
@@ -6427,19 +6444,21 @@ with test_set1 + test_set2 DD_REG
 
 proc txxand_ouch
 with test_set_int DD_REG
-    gen	killcc.
+    gen and_i {const,1}, %2
+	killcc.
 	test %1
 	bxx[1] {slabel, 1f}
-	bclr {const,0}, %2
+	clr_i %2
 	1:		yields	%2
 #if WORD_SIZE==2
 with test_set1 DD_REG
 #else
 with test_set1 + test_set2 DD_REG
 #endif
-    gen test %1
+    gen and_i {const,1}, %2
+	test %1
 	bxx[2] {slabel, 1f}
-	bclr {const,0}, %2
+	clr_i %2
 	1:		yields	%2
 
 proc txxior_ouch
@@ -6475,46 +6494,54 @@ pat tgt ior $2==WORD_SIZE		call txxior_ouch("ble", "bls")
 
 proc cmxtxxand
 with exact extend1 extend1 DD_REG
-    gen cmp_b %2, %1
+    gen and_i {const,1}, %3
+	cmp_b %2, %1
 	bxx[2] {llabel,1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with exact extend2 extend2 DD_REG
-    gen cmp_w %2, %1
+    gen and_i {const,1}, %3
+	cmp_w %2, %1
 	bxx[2] {llabel,1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with exact sconsts any_int DD_REG
     uses DD_REG=%1
-    gen cmp_i %2, %a
+    gen and_i {const,1}, %3
+	cmp_i %2, %a
 	bxx[2] {slabel, 1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with exact any_int sconsts DD_REG
     uses DD_REG=%2
-    gen cmp_i %1, %a
+    gen and_i {const,1}, %3
+	cmp_i %1, %a
 	bxx[1] {slabel, 1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with any_int-sconsts genreg DD_REG
-    gen cmp_i %1, %2
+    gen and_i {const,1}, %3
+	cmp_i %1, %2
 	bxx[1] {slabel, 1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with genreg any_int-sconsts DD_REG
-    gen cmp_i %2, %1
+    gen and_i {const,1}, %3
+	cmp_i %2, %1
 	bxx[2] {slabel, 1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with exact immediate_int-sconsts imm_cmp_int DD_REG
-    gen cmp_i %1, %2
+    gen and_i {const,1}, %3
+	cmp_i %1, %2
 	bxx[1] {slabel, 1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 with exact imm_cmp_int immediate_int-sconsts DD_REG
-    gen cmp_i %2, %1
+    gen and_i {const,1}, %3
+	cmp_i %2, %1
 	bxx[2] {slabel, 1f}
-	bclr {const,0}, %3
+	clr_i %3
 	1:		yields	%3
 
 proc cmxtxxior
