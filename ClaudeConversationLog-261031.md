@@ -211,3 +211,15 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
     compiler output uses 68010 instructions.
   - User: "yes apply". Fix and test applied (files identical to the tested
     scratch tree); `Tasks.md` A2 fixed. Not committed.
+- User: "continue". T5 (scratch only):
+  - cv header (`8625a2877`): already covered; `cvcheck.py` (cv_test)
+    unpacks a 32-byte big-endian header, checks its fields and that the
+    file size adds up, for several programs and the examples.
+  - con_mult (`eaa025860`, `.data4` for 4-byte constants with 16-bit int):
+    no test. New `tests/plat/core/initlong,e,.c`: an initialised long
+    array, an array of structs mixing char/short/long, a static long and an
+    int after them; checks every value. minix68k: passes; with the fix
+    reverted (`.data8`) it fails from the second array element on (asserts
+    at lines 0x1e-0x27). Portable C, runs on every platform.
+  - User: "yes apply". Test and build.py entry (files as tested), Tasks.md
+    T5 done. Not committed.
