@@ -75,6 +75,16 @@ test(
     commands=["ACKDIR=$(INSDIR) sh $[ins[0]] $(INSDIR)/bin/ack $[ins[1]] $[ins[2]]"],
 )
 
+# Differential test (T7): random C programs (diffgen.py, fixed seeds) must
+# print the same compiled with the host's C compiler and with ACK at every
+# optimisation level. difftest.sh takes other seeds for longer runs by hand.
+test(
+    name="diff_test",
+    ins=["./difftest.sh", "./diffgen.py", "plat/minix68k/emu"],
+    deps=["plat/minix68k+all", "+common"],
+    commands=["ACKDIR=$(INSDIR) sh $[ins[0]] $(INSDIR)/bin/ack $[ins[1]] $[ins[2]] '$(HOSTCC)'"],
+)
+
 # The BASIC test programs (lang/basic/test) with their expected output.
 # test17 and test18 expect a division by zero to arrive as SIGFPE ("trap 8")
 # and be caught by the BASIC runtime's signal handlers; on minix68k it is an
@@ -153,6 +163,7 @@ export(
         ".+fp_test",
         ".+cv_test",
         ".+fold_test",
+        ".+diff_test",
         ".+m68kcheck_test",
     ]
     + basic_tests,
