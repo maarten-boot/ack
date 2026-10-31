@@ -131,12 +131,16 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   codes; `test()` then `strcmp`ed the freed string (ASan heap-use-after-free in
   `eqtoken`). Reused memory could make a needed test look done. Now
   `machregs[0]` is scanned too (skipped when it holds a register).
-- [ ] **A1 — misaligned struct accesses in the linker.** UBSan "alignment":
-  `util/led` (`relocate.c`, `scan.c`, `save.c`, `finish.c`, `extract.c`) and
-  `modules/src/object/rd.c` read `struct outname`/`outsect` (with 8-byte members on
-  a 64-bit host) from 4-byte aligned positions in led's memory pieces. Works on
-  x86-64 and arm64; undefined in C and would fault on strict-alignment hosts. The
-  sanitizer job leaves the alignment check out until this is fixed.
+- [x] **A1 — misaligned struct accesses in the linker** (fixed 2026-10-31). UBSan
+  "alignment": `util/led` (`relocate.c`, `scan.c`, `save.c`, `finish.c`, `extract.c`)
+  and `modules/src/object/rd.c` used `struct outname`, `struct ar_hdr` and `ind_t`
+  (8-byte aligned on a 64-bit host) at 4 (mod 8) offsets in led's module piece:
+  the archive magic took `sizeof(int)`, `int_align()` rounded to `sizeof(int)`,
+  and the name table followed the 20-byte header and section entries. Now
+  `int_align()` rounds to `_Alignof(max_align_t)`, the magic takes
+  `int_align(sizeof(int))`, the section, name and offset tables start aligned,
+  and `modulsize()` follows that layout. Linked programs are byte-identical. The
+  sanitizer job checks alignment again.
 - [x] **M1 — two `!a & b` bugs in the Modula-2 front end** (fixed 2026-10-30, found by
   clang's `-Wlogical-not-parentheses`). `lang/m2/comp/type.c:674`
   `! df->df_kind & (D_ERROR|D_TYPE)` is `(!df_kind) & 0x4010`, always 0, so that
@@ -400,7 +404,7 @@ In order of value:
     `int`/`long` cases there and in the fork.
 - [x] **T8 — sanitizer CI job** (done 2026-10-30): `build-linux-sanitizers` in
   `.github/workflows/ccpp.yml` builds all host tools with gcc ASan + UBSan (strict:
-  any finding aborts; no leak or alignment checks, see A1) and runs all tests (about
+  any finding aborts; no leak checks; alignment since A1 was fixed) and runs all tests (about
   2 minutes on 4 cores). Getting it clean fixed one out-of-bounds read (S1) and
   undefined shifts (S2). A third job, `build-linux-clang`, builds with clang and
   runs all tests (2026-10-30); its warnings found M1.

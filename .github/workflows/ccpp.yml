@@ -18,14 +18,13 @@ jobs:
 
   # The host tools built with AddressSanitizer and UndefinedBehaviorSanitizer,
   # and all tests run with them: any finding fails the build. Leaks are not
-  # checked (the compiler passes never free), nor alignment (the linker reads
-  # structs from 4-byte aligned memory; fine on x86-64, see A1 in Tasks.md).
+  # checked (the compiler passes never free).
   build-linux-sanitizers:
     runs-on: ubuntu-latest
     env:
       ASAN_OPTIONS: detect_leaks=0
       UBSAN_OPTIONS: print_stacktrace=1
-      SAN: gcc -fsanitize=address,undefined -fno-sanitize=alignment -fno-sanitize-recover=all -fno-omit-frame-pointer
+      SAN: gcc -fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: apt
