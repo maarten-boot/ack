@@ -25,6 +25,10 @@ SINGLE	f1,f2;
 
 	l1 = get4((char *) &f1);
 	l2 = get4((char *) &f2);
+	/* A NaN is unordered: not equal to anything, itself included.
+	 * EM's cmf has no "unordered" result, so < or > will hold. */
+	if ((l1 & 0x7fffffffL) > 0x7f800000L || (l2 & 0x7fffffffL) > 0x7f800000L)
+		return 1;
 
 	if (l1 == l2) return 0;
 

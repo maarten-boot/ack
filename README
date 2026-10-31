@@ -69,6 +69,7 @@ Instructions:
   the configuration. Probably the only one you may want to edit is PREFIX,
   which changes where the ACK installs to, and PLATS, which changes which
   architectures are built. Look in `plat/*` to see what plats there are.
+  Both can also be given on the command line: make PLATS="minix68k pc86".
 
 - Run:
 

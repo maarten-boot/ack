@@ -15,17 +15,142 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   (`mach/proto/fp/build.py`) and replaces `fp68881.s` in the m68k2 libem, so link
   lines stay the same. minix68k runs the `floats` set (46/46 pass); a bit-exact
   comparison with host gcc matches except `sqrt` (1 ulp, libm).
-- [ ] **F1b — soft-float is not IEEE-exact** (Kahan's Paranoia, 2026-10-29: ACK
-  minix68k "Satisfactory though flawed", host gcc "Excellent"). From
-  `mach/proto/fp`: `*`, `/`, `+`, `-` are "neither chopped nor correctly rounded",
-  sticky bit wrong; overflow saturates at the largest number (no infinity);
-  "unbalanced range" at the underflow threshold. From ACK's C library: `sqrt` not
-  correctly rounded (-0.60 to +0.50 ulp), `pow(0,0)` gives 0 (should be 1), `printf`
-  `%.17e` prints only 16 digits. Paranoia (T10) tolerates the 2 FLAWs via `MAX_FLAWS`
-  in `plat/minix68k/tests/paranoia.sh`. Usable (BBC BASIC etc.), but results can differ
-  from other machines in the last bit. Options: fix rounding/infinity in
-  `mach/proto/fp`, or use another soft-float (e.g. Berkeley SoftFloat) built for
-  16-bit `int`; fix `pow`, `sqrt`, `printf` precision in `lang/cem/libcc.ansi`.
+- [x] **F1b — soft-float is not IEEE-exact** (done 2026-10-30: Paranoia "Excellent", as the host) (Kahan's Paranoia, 2026-10-29: ACK
+  minix68k "Satisfactory though flawed", host gcc "Excellent").
+  - [x] Step 1 (2026-10-30): rounding of `+ - * /` (double and float) and
+    double→float. `mach/proto/fp` had no sticky bit (alignment, subnormals, the
+    product's low half, the division remainder were dropped; `*` rounded twice;
+    float rounding ignored `m2`): 56 in 100,000 cases were 1 ulp low. Fixed with
+    `b64_jsft()` and sticky bits; test `fp_test` (`fpgen.c` on the host,
+    `fpcheck.c` in the emulator, 30,000 cases incl. subnormals) and Paranoia's
+    rounding and sticky-bit checks pass; `MAX_FLAWS` 2 → 1.
+  - [x] Step 2 (2026-10-30): infinity, NaN, -0. `extend()` treated exponent 2047
+    as a number (overflow gave infinity's bits, which then acted as 2^1024), knew
+    no NaN and made -0 +0; 0/0 trapped, x/0 and overflow inside EXTEND gave 0;
+    `cmf8` put the smallest subnormal below -0. Now IEEE results for the
+    operations, negation, comparison (a NaN is unequal to everything; EM's `cmf`
+    has no "unordered", so < or > holds), conversions and frexp; `fp_test` has a
+    special-value set; Paranoia: no failures, defects nor flaws, `MAX_FLAWS` 0.
+    Not tested: `modf` and `cfi`/`cfu` with infinity or NaN (overflow paths).
+  - [x] Step 3 (2026-10-30): ACK's C library (all platforms). `sqrt` is an exact
+    integer square root (was Newton, -0.60 to +0.50 ulp); `pow(x, 0)` = 1 also for
+    x = 0; `printf` prints `inf`/`nan`. `printf` rendered numbers into a static
+    16-byte buffer (upstream `53a3630d2`) and cut float precision to 15: `%f` of
+    `DBL_MAX` (316 characters) and others wrote past it (crash in the emulator);
+    now room for the longest, precision cut to 128. `fp_test` checks `sqrt` and the
+    `printf`/`strtod` round trip; `paranoia.sh` requires "Excellent".
+- [ ] **F1c — `printf` decimal digits not exact** (found 2026-10-30, all platforms;
+  low). With 17 significant digits (`%.16e`) the last digit differs from glibc in
+  about 1 of 400 doubles (`_ext_str_cvt` in `core/stdlib/ext_comp.c` works with
+  64-bit extended precision); printing and reading back (`strtod`) still gives the
+  same double (5,000 of 5,000). Beyond 17 digits ACK prints zeros or approximate
+  digits; an exact decimal tie is rounded up (glibc: to even). Fix would need
+  big-number arithmetic (as in `dtoa`).
+  *Skipped (2026-10-31, user's decision).* Design for later
+  (`ClaudeConversationLog-261031.md`): exact digits from m * 2^e as a big
+  integer (m << e, or m * 5^-e), 16-bit limbs, round half to even; about 1 KB of
+  code per program printing floats, slow on a 68010 only for extreme values.
+- [x] **F1d — the compiler folds float constants 1 ulp off** (fixed 2026-10-30; found 2026-10-30, all
+  platforms). `0.1 + 0.2` folded at compile time is `3fd3333333333333`; IEEE (gcc,
+  and ACK's own run-time soft-float) gives `3fd3333333333334`. So a constant
+  expression and the same computation at run time can differ in the last bit. The
+  front ends fold with their own float arithmetic (probably `modules/src/flt_arith`),
+  which does not round as IEEE does. Test: compare folded and volatile results.
+  Step 1 done: flt_arith keeps a sticky bit in add/sub/mul/div, new `flt_rnd()`
+  (test `modules/src/flt_arith/ieeetest.c`). Step 2 done: cemcom.ansi rounds
+  every float constant to its type (literal, fold, `int2float`, `float2float`;
+  `-Vm56` for pdpv7), `flt_str2flt` divides by exact powers of ten. Step 3
+  done: `tests/plat/floats/constfold,e,.c`, minix68k `fold_test`. Limitation: a literal of more than 19 significant digits that is
+  exactly a tie is judged on its first 19 digits. Later: `float_cst()` rounds half-up, not to
+  even. Modula-2 folding: investigated 2026-10-30, not planned (Modula-2 is not
+  a goal for Minix 2); m2 folds as exact values rounded once where used, 25 of
+  8,859 probed constants 1 ulp off. Possible fix and the m2 output problems on
+  minix68k: see the log, "Modula-2 constant folding".
+- [x] **E5 — ego's `cs` phase crashes on minix68k code** (fixed 2026-10-30). `gains()`
+  (`util/ego/cs/cs_profit.c`) looked at the instruction before an "addressing mode"
+  expression (`adp`, `lof`, `loi`, …) to see whether its operand is a simple load;
+  when the expression is the first instruction of its basic block that is NULL
+  (seen: `adp 1` in `tests/plat/core/exg`). It is now not eliminated (its operand
+  comes from before the block). Latent for every platform; it showed on minix68k
+  because `cs` (and `ud`) only run with a machine description. minix68k now uses
+  `util/ego/descr/m68k2.descr` (`EGO_PLAT_FLAGS`, installed by `util/ego/build.py`).
+- [x] **L1 — `fflush()` on an input stream skipped forward** (fixed 2026-10-30, all
+  platforms). `lang/cem/libcc.ansi/sys/stdio/fflush.c` gave back the unread buffered
+  bytes with `lseek(fd, +count, SEEK_CUR)` instead of `-count` (since 1990,
+  `d87444a7f`, when the `fseek()` call was inlined). The BASIC runtime flushes before
+  every READ, so every second DATA line was lost ("Out of data").
+- [x] **L2 — BASIC `^` swapped its operands** (fixed 2026-10-30, all platforms).
+  The compiler pushes the base first, so the exponent is `_power()`'s first
+  parameter; the 1985 runtime computed `exp(first * log(second))`, the 2013 rewrite
+  (`d5f010774`) `pow(first, second)`: `n ^ .5` gave `.5 ^ n`.
+- [ ] **B1 — BASIC cannot catch arithmetic errors on minix68k.** *(Deferred
+  2026-10-30: no BASIC work for now.)* The BASIC runtime
+  (`lang/basic/lib/trap.c`) catches errors with Unix signals (`signal(i, _trpfatal)`);
+  a division by zero on minix68k is an EM trap (7, EFDIVZ, from the soft-float code)
+  that `libem`'s `.trp` prints and exits on, it never becomes SIGFPE. So `ON ERROR`
+  does not see it (lang/basic/test test17/test18, which also expect "trap 8", the
+  signal number). Fix: let `.trp` raise a signal for unhandled traps, or let the
+  BASIC runtime install an EM trap handler (`sig`); the emulator would need signal
+  delivery to test it.
+- [x] **B2 — ACK BASIC programs only run where they were compiled** (fixed
+  2026-10-30, all platforms). DATA is now in the program: the compiler collects the
+  DATA text in memory (`datprintf()`) and emits it as `_datatext` next to
+  `_seektab`; READ/RESTORE on channel 0 read it in `lang/basic/lib/read.c` with the
+  same rules as reading the file did. No `<source>.bas.d` file is written or opened
+  any more.
+- [x] **B3 — BASIC LINE INPUT at the end of stdin recursed until the stack was gone**
+  (fixed 2026-10-30, all platforms). Not `_readint`/`_readflt`: INPUT already stops
+  with error 2 (end of file) or 29 (stdin closed, `ferror`). `_rdline`
+  (`lang/basic/lib/read.c`) answered every `fgets()` failure on the terminal with
+  "?Redo" and called itself; `fgets()` fails only at the end or on an error, so it
+  never stopped (emulator: "write into text" or endless "?Redo"). Now the terminal
+  gives errors 2/29 like INPUT; files keep error 40 (test28 expects it; its channel
+  is opened "ab", so 29 would be more accurate).
+- [x] **B4 — BASIC `ON ERROR GOTO` jumped to a garbage address** (fixed 2026-10-30,
+  all platforms). The program prologue (`lang/basic/src/gencode.c`, `prolog2()`)
+  called libc's `__setjmp(env, savemask)` with the caller's return address pushed
+  first, as the C front end does (`cemcom.ansi/eval.c`), but without the `savemask`
+  word: `__setjmp` read the return address from `PSIZE+WSIZE`, and `longjmp` from
+  `_trap()` landed on garbage (emulator: address error). Now `C_loc(0)` is pushed
+  and `asp` removes 2 pointers + 1 int. Test: `plat/minix68k/tests/basic/onerror.bas`
+  (LINE INPUT at the end of stdin caught by ON ERROR, then an error in the
+  handler); it fails without B3 or B4.
+- [x] **S1 — `em_opt` read past `em_flag[]`** (fixed 2026-10-30, all platforms).
+  `util/opt/putline.c` looked up pseudo-instructions (e.g. a `mes` without operands)
+  in `em_flag[]`, which only covers instructions: ASan "global-buffer-overflow, 25
+  bytes after em_flag". Whether `sp_cend` was written after such a pseudo depended on
+  the bytes after the table. Now: `em_flag` only for instructions; a pseudo without
+  its operand always gets `sp_cend` (as em_code's `C_end_narg`).
+- [x] **S2 — undefined shifts** (fixed 2026-10-30): `1 << 31` / `1L << 63` and shifts
+  of negative values in LLgen's set macros (`util/LLgen/src/sets.h`), cpp's and
+  cemcom's `arith_sign`, `em_opt` `peephole.c`, the constant folding of cemcom, m2 and
+  pc (`cstoper.c` sign extension and masks), ncg `fillem.c` (`rombit`), ego `cset.c`
+  and Musashi's `divs` (`plat/linux68k/emu/musashi/m68k_in.c`). Shift as unsigned; all
+  minix68k output byte-identical.
+- [x] **S3 — ncg freed strings still held in the condition codes** (fixed
+  2026-10-31, all ncg back ends; found by the sanitizer job running
+  `diff_test`, seeds 22 and 54). `garbage_collect()` (`mach/proto/ncg/salloc.c`)
+  marked the strings in use from `machregs+1`, skipping `machregs[0]`, where
+  `setcc()` keeps the token of the last instruction that set the condition
+  codes; `test()` then `strcmp`ed the freed string (ASan heap-use-after-free in
+  `eqtoken`). Reused memory could make a needed test look done. Now
+  `machregs[0]` is scanned too (skipped when it holds a register).
+- [x] **A1 — misaligned struct accesses in the linker** (fixed 2026-10-31). UBSan
+  "alignment": `util/led` (`relocate.c`, `scan.c`, `save.c`, `finish.c`, `extract.c`)
+  and `modules/src/object/rd.c` used `struct outname`, `struct ar_hdr` and `ind_t`
+  (8-byte aligned on a 64-bit host) at 4 (mod 8) offsets in led's module piece:
+  the archive magic took `sizeof(int)`, `int_align()` rounded to `sizeof(int)`,
+  and the name table followed the 20-byte header and section entries. Now
+  `int_align()` rounds to `_Alignof(max_align_t)`, the magic takes
+  `int_align(sizeof(int))`, the section, name and offset tables start aligned,
+  and `modulsize()` follows that layout. Linked programs are byte-identical. The
+  sanitizer job checks alignment again.
+- [x] **M1 — two `!a & b` bugs in the Modula-2 front end** (fixed 2026-10-30, found by
+  clang's `-Wlogical-not-parentheses`). `lang/m2/comp/type.c:674`
+  `! df->df_kind & (D_ERROR|D_TYPE)` is `(!df_kind) & 0x4010`, always 0, so that
+  "is not a type" error could never be reported (opaque type resolution; not
+  reproduced with a test); `walk.c:635` `!end_reached & REACH_FLAG` missed
+  "statement not reached" when other flags were set. Now `!(a & b)`.
 - [x] **F2 — heap overflow in `cv`'s relocation table** (fixed 2026-10-29, see
   `ClaudeConversationLog-261029.md`). `emit_relo()` allocated `4 * cnt` bytes, but
   gaps between relocations need an extra byte per 254 bytes, and `*((long*)b) = curr`
@@ -68,12 +193,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   64 KB boundary that is a few bytes. Seen: `examples/paranoia.c` gets an 866-byte stack
   (text+data+bss 64,670 bytes); the minix port works around it with `acc-minix -S`. Fix: a minimum stack (e.g. 16 KB) or a `descr`
   option passing chmem-style `+N` to `cv`.
-- [ ] **F4 — `plat/minix68k/descr` leftovers.** `:26-30` old Minix-ST paths
-  (`SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `MACHOPT_F`); `:57` `-l*` maps to a non-existent
-  `{EM}/{LIB}*` (so `-lm` cannot work; use `{PLATFORMDIR}/lib*`); `:59` `-fp` sets an
-  unused variable with an undefined `NLIB`; `:60` `-ansi` points to a missing file;
-  `:25` `CPP_F` lacks `-D__minix -D__m68k -D__mc68000 -D__mc68010`; no
-  `EGO_PLAT_FLAGS` and `util/ego/descr/m68k2.descr` is not installed.
+- [x] **F4 — `plat/minix68k/descr` leftovers** (fixed 2026-10-29). `-l<name>` now
+  maps to `{PLATFORMDIR}/lib<name>.a` (was the old Minix-ST `lib/minixST/tail_<name>`)
+  and `-lm` to `libc.a`, where the maths functions are; `-fp` is accepted and ignored
+  (floating point is always in software); `CPP_F` adds `-D__minix -D__m68k
+  -D__mc68000 -D__mc68010` (`_ATARI_ST` kept); the stale `NAME`, `M`, `MLIB`, `RT`,
+  `LIB`, `SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `-ansi` mapping and `{FLOATS?}` are
+  gone. Correction: `MACHOPT_F=-ml10` is not a leftover, it tunes `em_opt`
+  (multiplications by constants) and stays. `EGO_PLAT_FLAGS` is left out: see E5.
 - [ ] **F5 — minix68k and Minix-ST 2.0.4.**
   **Decision (2026-10-29): minix68k targets Minix-ST 2.0.4**, the system on the
   rosco_m68k board (not Minix 3: MMU, ELF, another message ABI, no 68k port).
@@ -100,7 +227,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   upstream at `7afa32a0a` and applies its own patch; today's fixes (F2 `cv`, E1/E2
   libem) reach the board only if it builds `rosco-minix68k` from this repository
   instead (after P1). A change in that project, for its owner.
-- [ ] **C + BASIC build target** (decided 2026-10-23, not implemented):
+- [ ] **C + BASIC build target** (decided 2026-10-23, not implemented; *BASIC
+  part deferred 2026-10-30: no BASIC work for now, C and asm first*):
   `langs` parameter for `build_plat_libs()` (`plat/build.py`), `langs=("c","basic")`
   in `plat/minix68k/build.py`, a `c_basic` export in `build.py`, minix68k examples
   without `.mod`/`.p` (`examples/build.py`).
@@ -121,46 +249,102 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 
 ## Low
 
-- [ ] **N1 — `getln()` writes before its buffer.** `util/cmisc/tabgen.c:353`: after
+- [x] **N1 — `getln()` writes before its buffer** (fixed 2026-10-29). `util/cmisc/tabgen.c:353`: after
   `while (n--)` runs out, `n` is -1 and `s[n - 1] = '\0'` writes `s[-2]` (lines longer
   than the buffer). Fix: remember the size and write `s[size - 1]`.
-- [ ] **N2 — wrong printf type in stabs output.** `lang/cem/cemcom.ansi/stab.c:217`
+- [x] **N2 — wrong printf type in stabs output** (fixed 2026-10-29, with the others listed). `lang/cem/cemcom.ansi/stab.c:217`
   prints `int fd_width` with `%ld`: the bit-field width in `-g` debug info can be
   garbage on a 64-bit host. Fix: `(long)` cast. Same class, harmless output only:
   `util/amisc/anm.c:316`, `ashow.c:136-140,192,249`, `asize.c:60` (`uint32_t` with
   `%lx`/`%ld`), `util/ego/share/alloc.c:38` (`size_t` with `%u`),
   `lang/basic/src/basic.lex:332,425` (debug printfs).
-- [ ] **N3 — format strings from data.** `util/arch/archiver.c:476`,
+- [x] **N3 — format strings from data** (fixed 2026-10-29). `util/arch/archiver.c:476`,
   `lang/cem/cpp.ansi/error.c:33`, `lang/basic/src/basic.g:242`, `basic.lex:247` pass a
   non-literal as the format; a `%` in a file or symbol name would be interpreted.
   Fix: `"%s"`.
-- [ ] **N4 — fragile code that works today.** `lang/basic/src/func.c:20` `cv()`
+- [x] **N4 — fragile code that works today** (fixed 2026-10-29; `rotate()` also
+  shifted a negative `w`). `lang/basic/src/func.c:20` `cv()`
   expands to two statements (used after `else` at `:96`, harmless now; wrap in
   `do { } while (0)`); `lang/basic/src/parsepar.c:39-87` indentation suggests the
   `files < 3` check is inside the loop (it is not, correctly); `util/opt/peephole.c:266`
   shifts a negative value (UB; use `~(offset)0 << amount`).
-- [ ] **F6 — `plat/minix68k/boot.s`** comes from the "Bleasdale" port (`:13`, `:30`);
+- [x] **F6 — `plat/minix68k/boot.s`** (comments fixed 2026-10-29; code unchanged) comes from the "Bleasdale" port (`:13`, `:30`);
   `clr.l -4(a0)` (`:34`) relies on the Minix-ST stack layout; `add #010,sp` (`:55`)
   does not match what was pushed. Comment and test on rosco.
-- [ ] **F7 — `modules/src/system/maketempfile.c`**: the `__minix` branch never
-  triggers with this ACK (see F4 `CPP_F`); with 16-bit `unsigned` the `temper()`
-  shifts (`x>>18`) are undefined. Use `unsigned long` under `__minix`.
-- [ ] **F8 — `cv.c` small issues:** `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
+- [x] **F7 — `modules/src/system/maketempfile.c`** (fixed 2026-10-30): the `__minix`
+  branch (reached since F4 added `-D__minix`) used 16-bit `unsigned` in `temper()`
+  (`x>>18` undefined, 15-bit names). Now `unsigned long` under `WIN32 || __minix`,
+  helper renamed `next_random()`, names printed with `%lx`.
+- [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob remains): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
   16 KB buffer per chunk; `chmem()` (`:333`) can return an uninitialised `new`.
   `plat/minix68k/libsys/build.py:11-13` globs `plat/minix/libsys`, which does not exist.
-- [ ] **F9 — build system:** `build/_sandbox.py:24,35,46` breaks with an `OBJ=`
-  outside the tree (`join()` with an absolute or `..` path); `Makefile:13` refuses
-  `PLATS=` on the command line (`PLATS ?=` would help upstreaming); `.drone.yml` and
-  `.travis.yml` are dead.
-- [ ] **N5 — signed `char` as array index** (11 places, e.g.
+- [x] **F9 — build system** (done 2026-10-30). `.drone.yml` and `.travis.yml` (Ubuntu
+  trusty, macOS, a `+ack` target that no longer exists) deleted. `PLATS ?=`: it can
+  be given on the command line again (upstream forbade it in `9a9f8ee1d` because
+  command-line variables did not regenerate the build; the current `build/ab.mk`
+  writes all variables to `vars.txt` and regenerates when they change: checked).
+  `build/_sandbox.py` (vendored ab) needs `OBJ` relative inside the tree; not
+  patched, the `Makefile` now stops with a clear message on `OBJ=/..`, `~..` or
+  a path with `..`.
+- [x] **N5 — signed `char` as array index** (fixed 2026-10-29 at the call sites) (11 places, e.g.
   `lang/cem/cemcom.ansi/LLlex.c:545-619`, `cpp.ansi/domacro.c:676`): today only
   reached with ASCII digits, but any byte ≥ 0x80 would index before the tables. Cast
   to `unsigned char` in the class macros.
-- [ ] **N8 — BASIC compiles are not reproducible.** Compiling `examples/hilo.bas`
-  twice with the same toolchain gives binaries that differ in one byte of code, an
-  absolute address operand (0x0001C870 vs 0x0001B870): looks like uninitialised
-  memory in the BASIC front end (`lang/basic/src`, `em_bem`). Matters for T3 (BASIC
-  tests) and for comparing builds. Check with valgrind/ASan on `em_bem`.
+- [x] **E6 — ego's inliner removed functions but kept their calls at `-O4`** (fixed
+  2026-10-30, all platforms). `struct call`'s `cl_flags` (`util/ego/il/il.h`) holds
+  bit flags (`CLF_SELECTED` 020, `CLF_EVER_EXPANDED` 040, `CLF_FIRM` 0100, the number
+  of inline parameters in the low 4 bits) but was declared `bool`: ego's old
+  `typedef byte bool`, which the 2025 "Use stdbool throughout" commit (`0782bc80e`)
+  made a real `_Bool`. `SELECTED()` then stored 1, `IS_SELECTED()` tested `& 020` and
+  got 0, so `cleancals()` dropped every selected call while `singles()` had already
+  marked the callee dispensable: the function body was removed, the call stayed
+  ("Undefined: __II0"). Now `byte cl_flags`. Every program at `-O4`+ with a static
+  function called once was affected, not only ACK's own libraries.
+- [x] **N10 — long file names overran cpp.ansi's buffers** (fixed 2026-10-30).
+  `preprocess.c` formatted every line directive into `char Xbuf[256]`, so a source
+  path of about 245 characters crashed the preprocessor; `replace.c` built
+  `__FILE__` in `FilNamBuf[PATHLENGTH]`, 3 bytes short, and a `#line` name can be
+  any length. Line directives are now echoed (prefix and number formatted into 32
+  bytes), `__FILE__` gets `realloc`ed. Test: `lang/cem/cpp.ansi/longpath.sh`
+  (a 600+ character path and a 2000-character `#line` name).
+- [ ] **A3 — misaligned structs in `util/ass`** (found 2026-10-31, upstream build
+  with all platforms; not used by minix68k). `-fsanitize=alignment`: 948 reports
+  in em22's assembler (`ass00.c`, `ass30.c`-`ass80.c`, `assci.c`, `asscm.c`,
+  `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
+  (mod 8) addresses, from its own allocator in `asscm.c`. Same kind as A1.
+  Upstream only, unless em22 is ever built here.
+- [x] **A2 — the minix68k assembler started in 68000 mode** (fixed 2026-10-31). A
+  68010 instruction (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gave "68010
+  instruction (warning)", and the assembler counts warnings as errors, so assembly
+  failed unless the file had `.68010` (`model`, defined by `comm3.c`, started at 0).
+  Now `mach/m68k2/as/mach0.c` sets `model = 1` in `machstart()` at the start of
+  every pass; `.68000` still switches back. Test: `m68kcheck_test` assembles
+  `move ccr,d0; rtd #4` without a directive and must fail with `.68000`. Found
+  with T6.
+- [x] **N11 — file names were not escaped in line directives and `__FILE__`**
+  (fixed 2026-10-31). `cpp.ansi` wrote the name between quotes as it is, so a `"`
+  or `\` in a file name gave a broken string, and a name from `#line` (read with its
+  escapes processed) lost them. Now `quoted_name()` (`replace.c`) writes it as a
+  string literal (`"`, `\` escaped, control characters in octal) for both. Test:
+  `lang/cem/cpp.ansi/longpath.sh` (a directory `q"b\c`, the output read back, and
+  `#line` with escapes).
+- [x] **N12 — powerpc ncg and mcg cannot compile a volatile access.** (fixed
+  2026-10-30) cemcom.ansi emits `nop` after a volatile access (`eval.c`);
+  `mach/powerpc/ncg/table` had no `pat nop` ("No table entry for 86" on linuxppc
+  and osxppc) and mcg's treebuilder aborted on it ("unknown simple instruction
+  'nop'", linuxmips). The other back ends have one. Now `pat nop` with `kills
+  ALL` in the powerpc table, and `op_nop` ignored in mcg. Test:
+  `tests/plat/core/volatile,e,.c`.
+- [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
+  linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
+  `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
+  if those platforms matter (upstream).
+  *Skipped (2026-10-31, user's decision): other platforms only, upstream.* Fix
+  as F4: `lib*.a` and `-lm` → `libc.a` in each `descr`.
+- [x] **N8 — BASIC compiles are not reproducible** (fixed 2026-10-30).
+  `lang/basic/src/gencode.c` emitted the length of the DATA file name as
+  `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Now
+  `strlen()`. All 49 BASIC test programs compile reproducibly.
 - [ ] **N6 — merge commit with a placeholder identity.** `c50619962` ("sync from
   upstream", 2026-10-29) is authored by `Your Name <you@example.com>`: set
   `user.name`/`user.email` on the machine that made it. History is pushed, so leave
@@ -195,35 +379,56 @@ In order of value:
   need Pascal/Modula-2, so a C-only list); `floats` **fails today** (F1: 68881 code
   on a 68010) and becomes the acceptance test for the soft-float work; `long-long` is
   not supported by the minix68k descr (no `q` size).
-- [ ] **T3 — BASIC tests**: run `lang/basic/test/*.bas` under the emulator and compare
-  with `*.b.g` (feed the interactive ones a fixed stdin, or skip them); covers the
-  BASIC front end and runtime that bbcbasic-style work relies on.
-- [ ] **T4 — `cv` regression tests (host only, no emulator):** a small script that
-  links test programs and checks the output: header fields (32 bytes, sizes), the
-  relocation table decodes, ends with 0, every relocated long points into the image
-  (≤ end of bss). Cases: an empty program, the examples, and the F2 case (pointers
-  separated by large initialised arrays: before the fix `cv` aborted). Also a program
-  whose size is just under 64 KB (F3, stack size).
+- [x] **T3 — BASIC tests** (done 2026-10-30): 45 of the 47 programs with expected
+  output run in the emulator on every `make` (`plat/minix68k/tests/basic.sh`, compiled
+  and run in a directory of their own with `lang/basic/test/tst`, stdin `/dev/null`).
+  test26 has a 16-bit expected output (`plat/minix68k/tests/basic/test26.b.g`);
+  test17/test18 are skipped (B1). Found and fixed on the way: L1, L2.
+- [x] **T4 — `cv` regression tests (host only, no emulator)** (done 2026-10-30):
+  `plat/minix68k/tests/cv.sh` builds test programs and checks each with
+  `cvcheck.py`: header fields, stack (16 KB or up to a 64K boundary), the relocation
+  table decodes, steps are even, it ends with 0 at the end of the file, every
+  relocated long points at most to the end of bss. Cases (`tests/cv/`): an empty
+  program, pointers in data, the F2 gaps (≥ 236 skip bytes), F3 (image padded to
+  65528 bytes: stack must be 16384), and hilo.c, mandelbrot.c, startrek.c, hilo.bas.
+  With the pre-F2 `cv` it fails on F2 (abort) and F3 (stack 8).
 - [x] **T10 — float conformance test** (done 2026-10-29). Kahan's Paranoia
   (`plat/minix68k/tests/paranoia.c`, unmodified; its own `read()` declaration is
   removed by `sed` at build time) runs in the emulator on every `make`;
   `paranoia.sh` fails on no normal end, any FAILURE/SERIOUS DEFECT/DEFECT, or more
   than `MAX_FLAWS` = 2 FLAWs (the known F1b flaws: lower it when F1b is fixed). Not
   yet a test: the bit-exact float differential test used for F1.
-- [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
-  structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
-  of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
-- [ ] **T6 — 68010 instruction check without an emulator**: assemble/compile the
-  runtime libraries and a set of C files to `.s` and fail on 68020/FPU mnemonics
-  (`extb`, `muls.l`, `divs.l`, bit-field ops, `rtd`, scaled index, `f*`) and on
-  `move sr,<ea>` (privileged on the 68010). Cheap; T1 catches the same at run time.
-- [ ] **T7 — differential tests**: compile the same portable C programs (examples,
+- [x] **T5 — regression tests for the branch's earlier fixes** (done 2026-10-31).
+  Initialised `long`s and structs with longs keep their layout (`con_mult()`
+  `.data4` fix, `eaa025860`): `tests/plat/core/initlong,e,.c`, fails with
+  `.data8`. The 32-byte `cv` header (`8625a2877`) was already checked by
+  `cvcheck.py` (cv_test).
+- [x] **T6 — 68010 instruction check without an emulator** (done 2026-10-30).
+  68020 integer instructions and addressing modes cannot get in: the m68k2
+  assembler rejects them. New host tool `plat/minix68k/m68kcheck` (installed as
+  `lib/ack/minix68k/m68kcheck`): disassembles the text of ACK objects and
+  archives with Musashi as a 68010 and reports F-line (FPU), A-line, non-68010
+  and privileged instructions (`-s` allows privileged ones, for kernel/boot
+  code). Test `m68kcheck_test`: all minix68k libraries and start-off files clean,
+  and a file with `fmove` and `move sr,d0` must give exactly those two findings.
+- [x] **T7 — differential tests** (done 2026-10-31): compile the same portable C programs (examples,
   `paranoia.c`, small integer/long/struct tests) with the host gcc and with ACK for
   minix68k, run both (natively and in the emulator), compare outputs. Mind 16-bit
   `int`: use `long` where values exceed 32767.
-- [ ] **T8 — sanitizer and clang jobs for the host tools**: build with
-  `-fsanitize=address,undefined` and run T2–T4 (would have caught F2); build with
-  clang (still Linux) to catch strict-aliasing UB like F11/N7 before it bites.
+  - Progress 2026-10-31: random-program generator (scratch) found ten code
+    generation bugs (log, T7); all fixed in the repo with one regression test
+    each in `tests/plat/core`; seeds 1-5000 equal at O0..-O4. Permanent
+    test `diff_test` (`plat/minix68k/tests/difftest.sh`, `diffgen.py`):
+    65 fixed seeds against the host C compiler; longer runs by hand with a
+    seed range. The generic fixes (2, 3, 4, 5, 7, 9) are upstream PR #383
+    (`upstream/codegen-fixes`); `andbool`, `foldoverflow`, `foldcii` got
+    `int`/`long` cases there and in the fork.
+- [x] **T8 — sanitizer CI job** (done 2026-10-30): `build-linux-sanitizers` in
+  `.github/workflows/ccpp.yml` builds all host tools with gcc ASan + UBSan (strict:
+  any finding aborts; no leak checks; alignment since A1 was fixed) and runs all tests (about
+  2 minutes on 4 cores). Getting it clean fixed one out-of-bounds read (S1) and
+  undefined shifts (S2). A third job, `build-linux-clang`, builds with clang and
+  runs all tests (2026-10-30); its warnings found M1.
 - [x] **T9 — CI** (done: the Linux job runs plain `make`, which runs all 47
   minix68k tests, about 70 s on GitHub).
 
@@ -236,3 +441,10 @@ terminated), `util/opt/putline.c:404` (commented in the code), `util/ego/cf/cf.c
 with a 16-bit `size_t` on the board), `mach/m68k2/as/mach5.c:288`, `util/led/finish.c:147`,
 `util/ack/trans.c:618` (maybe-uninitialized false alarms),
 `modules/src/flt_arith/flt_str2fl.c:244` (redundant check).
+
+The ACK 6.0 pre-releases (checked 2026-10-30): upstream's branches
+`release-6-0-pre-1` (2007), `-pre-3` (2007) and `-pre-4` (2010), and the tag
+`release-6-0-pre-5` (2016), have no commits that are not in upstream `default`
+(`git rev-list 7afa32a0a..<ref>` is empty for each). They are old snapshots of
+the main line; this fork is based on `default` (2026), so it has everything in
+them. Nothing to take over.

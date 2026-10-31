@@ -27,3 +27,9 @@
 
 #undef	VALWIDTH
 #define	VALWIDTH	8
+
+/* minix68k runs on a 68010: accept its instructions unless the source says
+ * .68000. Set at the start of every pass, as .68000/.68010 are seen again.
+ */
+#undef	machstart
+#define	machstart(x)	(model = 1)

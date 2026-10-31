@@ -41,6 +41,7 @@ int	size;
 	char *cpt1;
 	unsigned long	tmp;
 	int	leadbit = 0;
+	int	special = 0;
 
 	cpt1 = (char *) from;
 
@@ -63,7 +64,9 @@ int	size;
 		to->exp >>= DBL_EXPSHIFT;
 	else
 		to->exp >>= SGL_EXPSHIFT;
-	if (to->exp > 0)
+	if (to->exp == (size == sizeof(DOUBLE) ? DBL_MAX + 1 : SGL_MAX + 1))
+		special++;		/* infinity or NaN */
+	else if (to->exp > 0)
 		leadbit++;	/* will set Lead bit later	*/
 	else to->exp++;
 
@@ -78,8 +81,7 @@ int	size;
 		to->m1 = get4(cpt1);
 #endif
 		if (to->exp == 1 && to->m1 == 0 && tmp == 0) {
-			to->exp = 0;
-			to->sign = 0;
+			to->exp = 0;	/* zero, keeping its sign */
 			to->m1 = 0;
 			to->m2 = 0;
 			return;
@@ -93,8 +95,7 @@ int	size;
 		to->m1 = get4(cpt1);
 		to->m1  <<= SGL_M1LEFT;	/* shift	*/
 		if (to->exp == 1 && to->m1 == 0) {
-			to->exp = 0;
-			to->sign = 0;
+			to->exp = 0;	/* zero, keeping its sign */
 			to->m1 = 0;
 			to->m2 = 0;
 			return;
@@ -103,6 +104,15 @@ int	size;
 		to->m2 = 0L;
 	}
 
+	if (special) {
+		/* NaN (a fraction bit set; bit 31 still holds an exponent
+		 * bit): made quiet, as an operation on it must */
+		if ((to->m1 & ~NORMBIT) | to->m2)
+			to->m1 |= EXT_QNAN;
+		to->m1 |= NORMBIT;
+		to->exp = EXT_INFNAN;
+		return;
+	}
 	to->m1 |= NORMBIT;				/* set bit L	*/
 	if (leadbit == 0) {		/* set or clear Leading Bit	*/
 		to->m1 &= ~NORMBIT;			/* clear bit L	*/

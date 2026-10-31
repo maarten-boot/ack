@@ -20,8 +20,6 @@ SINGLE	f;
 {
 	unsigned char *p;
 
-	if (f != (SINGLE) 0) {
-		p = (unsigned char *) &f + OFF;
-		*p ^= 0x80;
-	}
+	p = (unsigned char *) &f + OFF;
+	*p ^= 0x80;	/* also for 0: -(+0) is -0 */
 }

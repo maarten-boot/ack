@@ -1,0 +1,1352 @@
+# Claude conversation log — 2026-10-30
+
+Continues `ClaudeConversationLog-261029.md`. Open work is in `Tasks.md`.
+
+## Session 4
+
+### N8 + T3: reproducible BASIC, and the BASIC tests in the emulator
+
+User:
+> i pushed (CI for `7040c0f9e` passed)
+> N8 + T3
+
+- **N8**: compiling `hilo.bas` six times gave six different EM files, differing in
+  one `rom` constant: the third word of the DATA file descriptor `datfdes`.
+  `lang/basic/src/gencode.c` emitted `(arith)(myitoa(strlen(datfname)))`, and
+  `myitoa()` returns a `char *` to a static buffer: the "length" was a heap address.
+  Now `(arith)strlen(datfname)` (10 for "hilo.bas.d"). The runtime's `_opnchn()` only
+  uses the string pointer, so running programs were not affected. After the fix all
+  49 programs in `lang/basic/test` compile identically three times in a row.
+- **Prototype** (47 programs with `*.b.g` expected output, compiled and run in the
+  emulator with stdin `/dev/null`): 33 matched. The differences, in order:
+  - "Out of data" right away (checker, opg5, opg6, test19, test20): a C program doing
+    the same `fscanf` reads works, so the emulator and stdio reading were fine. A new
+    `-s` option in the emulator (logs every system call) showed `lseek(3, +35,
+    SEEK_CUR)` with the 38-byte data file already buffered; the instruction trace and
+    the symbols of a `.out` link gave `_setchan` → `fflush` → `lseek`. **L1**:
+    `fflush()` on an input stream must give back the unread buffered bytes, `-count`,
+    but did `+count` (since 1990, `d87444a7f`, when `fseek(stream, 0, SEEK_CUR)` was
+    inlined without its minus). Fixed in `lang/cem/libcc.ansi/sys/stdio/fflush.c`
+    (all platforms).
+  - "File not found" (test21, test22, test28, test30): the programs use
+    `lang/basic/test/tst/`; with that directory beside them they match.
+  - opg3/opg4: `n ^ .5` printed 0.5, 0.25, 0.125: **L2**, the operands of `^` were
+    swapped. The compiler (unchanged since 1988) pushes the base first, so the
+    exponent is the first parameter of `_power()`; the 1985 runtime computed
+    `exp(first * log(second))`, the 2013 modernisation (`d5f010774`) replaced it by
+    `pow(first, second)`. Fixed in `lang/basic/lib/power.c` (parameters named for
+    what they are, `pow(base, exponent)`), and the prototype in `lib.h`.
+  - test26: `hex(-1)`/`oct(-1)` give `ffff`/`177777` with 16-bit `int` instead of
+    the 32-bit `ffffffff`/`37777777777`; only those two lines differ: a minix68k
+    expected output in `plat/minix68k/tests/basic/test26.b.g`.
+  - test17/test18: expect a division by zero to reach the BASIC runtime as SIGFPE
+    ("trap 8") and be caught by its signal handlers; on minix68k it is EM trap 7
+    from the soft-float code, which libem prints and exits on: **B1**, skipped.
+  - Also seen: the installed `hilo_bas_minix68k.exe` stops at start-up anywhere but
+    its compile directory ("File not found" for `hilo.bas.d`): **B2**.
+- **T3**: `plat/minix68k/tests/basic.sh` compiles a program for minix68k in a
+  directory of its own with a copy of `tst/`, runs it in the emulator with stdin
+  `/dev/null` under coreutils `timeout`, and compares the output; one test per
+  program in `plat/minix68k/tests/build.py` (45: all with expected output except
+  test17/test18). The first version used `util/build`'s testrunner, which closes
+  stdin: a BASIC program reading input then retries "?Redo" until the stack is gone
+  (**B3**, low).
+- Checked: the harness fails (exit 1, a diff and `@@FAIL basic opg3`) with a wrong
+  expected file (opg3.b.g and opg4.b.g are identical, so test01.b.g); a fresh clone
+  with plain `make` runs 92 minix68k tests (47 + 45 BASIC), all passing.
+
+### B2: DATA in the program
+
+User:
+> start with B2, put DATA in the program
+
+- Before: the compiler wrote the DATA text to `<source>.bas.d` (one line per DATA
+  statement) and every program opened that file at start-up, by the name used at
+  compile time, as channel 0; READ read it with `fscanf`/`fgetc`, RESTORE n
+  `fseek`ed to the start and skipped lines (`_seektab`: BASIC line → line index).
+- Compiler (`lang/basic/src`): `datprintf()` collects the DATA text in a growing
+  buffer (`basic.g`'s eight `fprintf(datfile, …)` calls); `datatable()` emits it as
+  the rom string `_datatext` (always, empty without DATA) before `_seektab`;
+  `gendata()` (opening the file at start-up) and the data file name/`FILE`
+  (`datfname` in `bem.c`/`bem.h`/`initialize.c`, `datfile`, the unused
+  `sys_filesize()` offset in `datastmt()`) are gone.
+- Runtime (`lang/basic/lib`): `read.c` reads `_datatext` through `_datptr` when the
+  channel is 0 (`_datint`, `_datflt` with `strtol`/`strtod`, `_datstr` for quoted
+  and unquoted strings; skip white space, read, skip past the next `,` or newline;
+  nothing left: error 2 "Out of data"); `_restore` moves `_datptr` to the start or
+  past the DATA lines before the given line. `file.c`'s `_setchan(0)` no longer
+  points the channel at a FILE (it keeps output on stdout, so the next
+  `fflush(_chanwr)` is not `fflush(NULL)`).
+- Checked: a fresh clone with plain `make` runs all 92 minix68k tests (45 BASIC,
+  checker and test19 use RESTORE); the installed `hilo_bas_minix68k.exe` now runs in
+  any directory; compiling writes no `.bas.d`; a program reading mixed DATA (ints,
+  a negative, a float, a quoted string with a space, an unquoted word), RESTORE 20,
+  RESTORE and reading past the end prints exactly the same as the old side-file
+  build in its compile directory (byte-identical output, including "LINE 110:ERROR
+  2: Out of data").
+
+### E5: ego's cs crash
+
+User:
+> i pushed (CI for `607be73b4` passed)
+> start with E5
+
+- Reproduced with the m68k2 description switched on (`util/ego/build.py`
+  `build_descr("m68k2")`, `EGO_PLAT_FLAGS` in `plat/minix68k/descr`): `em_ego -O3`
+  on `tests/plat/core/exg` crashes in `cs`.
+- gdb: `instrgroup(lnp=NULL)` from `gains()` (`util/ego/cs/cs_profit.c:178`);
+  `avp->av_instr` 4 (`adp`, an "addressing mode" in the description's `%%CS` list),
+  `avp->av_found` the first line of its basic block, so `l_prev` is NULL. `gains()`
+  asks whether the operand comes from a simple load; the `ads` case just above
+  checks `l_prev`, this one did not.
+- Fix: return "no gain" when there is no previous instruction (the operand comes
+  from before the block; nothing is eliminated). Only changes behaviour where `cs`
+  used to crash. minix68k now uses `m68k2.descr`.
+- Checked:
+  - the whole suite with all minix68k libraries and tests built at `-O3`: 92/92
+    (before the fix `cs` crashed);
+  - the normal build (`-O`): 92/92;
+  - against the normal libraries: `mandelbrot.c` and Kahan's Paranoia at `-O`,
+    `-O3`, `-O4`, `-O6` give identical output (Paranoia: 2 FLAWs at every level);
+    all 43 C and EM test programs of `tests/plat` (core, bugs, floats; the `,e,`
+    ones linked with `-.e` as the suite does) pass at `-O4` and `-O6`.
+- Found on the way, not caused by this: building ACK's own libraries at `-O4`
+  (`make ACKCFLAGS=-O4`) fails to link the examples ("Undefined: __II0, __II5",
+  ego inliner names), with or without the description: E6.
+
+### T8: a sanitizer CI job
+
+User:
+> i pushed (CI for `e03f1a3f7` passed)
+> start with T8
+
+- Built every host tool with `CC=HOSTCC="gcc -fsanitize=address,undefined …"` (in
+  `CC` so links that ignore `LDFLAGS` get it too) and ran `make` with all tests.
+  Leak checking off (`ASAN_OPTIONS=detect_leaks=0`): the passes never free.
+- Findings, first in recover mode to collect them, then strict
+  (`-fno-sanitize-recover=all`) with `ninja -k 0` so every test runs (the test
+  driver hides the output of passing tests, so recover mode missed UB inside the
+  emulator; `make -k` does not reach ninja):
+  - **S1** ASan: `util/opt/putline.c:138` read 25 bytes after `em_flag` (133
+    entries): `instr` 159 = `ps_mes` with no operand; pseudos went through the
+    instruction table for the control-flow and the `sp_cend` decisions. Fixed: only
+    instructions use `em_flag`; a pseudo without its operand always gets `sp_cend`
+    (em_code's `CC_endnarg` writes `ps_end` + `sp_cend` the same way).
+  - **S2** UBSan undefined shifts: LLgen's bit-set macros (`1 << 31`), cpp's and
+    cemcom's `arith_sign` (`1L << 63`; cpp has its own `arith.h`), `peephole.c`
+    (twice), cemcom/m2/pc constant folding (`(x << n) >> n` sign extension of
+    negatives, `bt = (bt << 8) + 0377` overflowing), ncg `rombit`, ego `cset.c`
+    (three), Musashi `divs` (`remainder << 16`, four). All shifted as unsigned.
+  - **A1** UBSan alignment in `util/led` and `modules/src/object/rd.c`: left out of
+    the job for now (task).
+- Result: strict mode, the full build and all 92 minix68k tests: 0 ASan, 0 UBSan
+  reports, 1 min 55 s on 4 cores. Normal build before and after: all 107 minix68k
+  programs/objects and 521 archive members byte-identical.
+- `.github/workflows/ccpp.yml`: new job `build-linux-sanitizers` (same pinned
+  checkout, re-checked: v7.0.1 is still the latest release and the hash a commit);
+  the YAML parses.
+
+### Small leftovers, 1: a clang CI job
+
+User:
+> i pushed (CI for `71763e7d4` passed: build-linux 82 s, build-linux-sanitizers 136 s)
+> can we do 5 first or do you expect more items from the other to be added ?
+> start with the clang job
+
+- Answered: the small items can go first; F1b/A1 and the clang job may add findings;
+  upstream contributions are best last (then they include everything).
+- A clang 21 build (`make CC=clang HOSTCC=clang`): builds, all 92 minix68k tests
+  pass (the Modula-2 failure of 2026-10-24 is gone with `-fno-strict-aliasing`).
+- Its 65 warnings: mostly EM opcodes > 127 in a signed `char`/`byte` (by design, masked
+  with `BMASK`), the known `led/scan.c` overflow guard, an intended assignment in a
+  condition (`cemcom.ansi/arith.c:57`), dangling elses that match the indentation
+  (`cemcom.ansi/eval.c`), and **M1**, two real Modula-2 bugs: `! df->df_kind &
+  (D_ERROR|D_TYPE)` (`type.c:674`, always 0 with D_TYPE 0x10 and D_ERROR 0x4000) and
+  `!end_reached & REACH_FLAG` (`walk.c:635`); now `!(… & …)`. After the fix a test
+  program gets "statement not reached" after a RETURN in a loop; the type.c path (opaque
+  types) was not reached by my test.
+- `.github/workflows/ccpp.yml`: third job `build-linux-clang` (apt `clang`, `make
+  CC=clang HOSTCC=clang`). Fresh clones with all changes: gcc 92/92, clang 92/92.
+
+### Small leftovers, 2: E6, ego's inliner at -O4
+
+User:
+> i pushed (CI for `9bab97f62` passed: build-linux 78 s, sanitizers 96 s, clang 64 s)
+> start with E6
+
+- Reproduced (`make ACKCFLAGS=-O4`): `read.o` in `libbasic.a` references `__II2` and
+  `__II3`, the names of its own static functions, as undefined; at `-O3` the object
+  has 12 procedures, at `-O4` 10: `_datint`/`_datflt` (each called once) were
+  removed, the `jsr __II2`/`jsr __II3` in `_readint`/`_readflt` stayed.
+- A 20-line C reproducer (two static functions, each called once inside an `if`)
+  does the same; `em_ego -Q` reports "inline substitutions: 0". An inliner built with
+  `VERBOSE` says "singles: procedure 1 can be removed" for both; in gdb the callers'
+  `P_CALS` lists are empty in pass 3 although `select_calls()` had marked the calls
+  selected.
+- gdb prints the call's `cl_flags` as `false`/`true`: `cl_flags` is `bool`. It holds
+  bit flags (CLF_INLPARS 017, CLF_SELECTED 020, CLF_EVER_EXPANDED 040, CLF_FIRM
+  0100), declared `bool` in 1984 when ego had `typedef byte bool`; the 2025 stdbool
+  commit (`0782bc80e`) replaced that typedef by `_Bool`. `SELECTED()` stored 1,
+  `IS_SELECTED()` (`& 020`) gave 0, `cleancals()` dropped the call, and the callee,
+  already marked dispensable by `singles()`, was removed. The other `bool` fields
+  in ego are real yes/no values. Fixed: `byte cl_flags`.
+- Checked: the reproducer has no undefined names and reports 2 substitutions; clean
+  builds of everything (libraries, examples, tests) at `-O4` and `-O6`: all 92
+  minix68k tests pass; the normal build is byte-identical before and after (107
+  programs/objects, 521 archive members).
+
+### Small leftovers, 3: F7, `sys_maketempfile()` with 16-bit `int`
+
+User:
+> you can commit (E6: `76abdb282`, `32d145a67`)
+> you can continue
+
+- The `__minix` branch of `modules/src/system/maketempfile.c` is now reached (F4 added
+  `-D__minix` to `CPP_F`). Its private `rand_r()`/`temper()` used `unsigned`, 16 bits
+  on Minix-ST: `x>>18` is undefined, the `0x9D2C5680` masks are lost, and the hash
+  passed to `%x` is at most 15 bits.
+- Fixed: under `WIN32 || __minix` the seed and `temper()` are `unsigned long`
+  (`seed_t`); the helper is renamed `next_random()` (a Minix libc that declares
+  `rand_r()` would clash, as glibc does with `-D__minix` on the host); on other
+  systems `next_random()` wraps the real `rand_r()`. The hash is `unsigned long`,
+  printed with `%lx`.
+- Checked: host gcc `-Wall -Wextra` with and without `-D__minix`; full build of a
+  fresh clone, all tests pass; a test program built with `ack -mminix68k` and run in
+  the emulator (`int=2 long=4`) gives `ack.tst-797c7f8d.dat`, `-61755400`, `-76a9c7ba`
+  (old code: `-3933`, `-735`, `-338e`); with the file kept, `O_EXCL` moves on to a
+  new name.
+
+### Small leftovers, 4: T4, `cv` checked without the emulator
+
+User:
+> yes commit (F7: `d278a1f22`, `0e6405a91`)
+> start with T4
+
+- `plat/minix68k/tests/cvcheck.py` checks one executable: magic `0x04100301`, header
+  length 0x20, unused fields 0, even text/data sizes, stack (`--stack N` exact,
+  otherwise 16384 or up to a 64K boundary as `cv` chooses, never below 16384), the
+  GEMDOS relocation table (start offset even and inside text+data, steps even, 1 =
+  skip 254, ends with 0 exactly at the end of the file), and every relocated long ≤
+  text+data+bss. `--min-relocs`/`--min-skips` for the cases that need them.
+- `plat/minix68k/tests/cv.sh` (test `cv_test` in `tests/build.py`, part of `make`)
+  builds `tests/cv/empty.c`, `ptrs.c` (pointers to text, rom, data, bss),
+  `relocgap.c` (F2: two 30000-byte initialised arrays between pointers, ≥ 236 skip
+  bytes), `near64k.c` (F3: built once to measure, then a bss pad makes
+  text+data+bss = 65528; the stack must be 16384 and the image exactly 65528), and
+  the examples hilo.c, mandelbrot.c, startrek.c, hilo.bas.
+- Results (fresh clone, `make`): all pass; e.g. relocgap relocs 46, skips 236, table
+  286 bytes; startrek 2664 relocations, stack 16384.
+- The checker itself: seven damaged copies of the relocgap output (magic, a byte cut
+  off, a byte added, an odd step, a relocated long beyond bss, total 100 bytes short,
+  start offset past text+data) are each rejected with the right message. With the
+  pre-F2 `cv` (`8625a2877`) put into the staging tree, `cv.sh` fails on relocgap
+  (`malloc(): corrupted top size`) and near64k (stack 8); the rest passes.
+
+### Small leftovers, 5: B3, BASIC input at the end of stdin; B4 found
+
+User:
+> yes commit (T4: `73e4c602e`, `466f6b96d`)
+> start with B3
+
+- Reproduced in the emulator (scratch clone at HEAD), with stdin `/dev/null`, closed
+  (`<&-`) and text:
+  - `INPUT A`, `INPUT A$`: error 2 "Out of data" at the end, error 29 "Bad file mode"
+    with stdin closed (`__fillbuf` sets `_IOERR` when `read()` fails): already fine.
+    The Tasks.md text blamed `_readint`/`_readflt`; wrong.
+  - `LINE INPUT A$`: `_rdline` (`lang/basic/lib/read.c`) called itself after
+    "?Redo" whenever `fgets()` returned NULL: at the end, endless recursion until
+    the stack reached the program ("write into text or rom"); closed: endless
+    "?Redo".
+- Fixed: on the terminal (`_chann == -1`) `_rdline` gives error 29 if `ferror`, else
+  error 2, as INPUT does; other channels keep error 40. A first version gave 29/2
+  on every channel; test28 (LINE #1 past the end of a file opened "r", which is
+  `fopen(.., "ab")`, so `ferror`) then printed error 29 instead of the expected 40;
+  kept 40 there.
+- After the fix: LINE INPUT gives error 2 / 29 like INPUT; full build, all tests pass.
+- **B4 found:** with `ON ERROR GOTO 100`, every error (also a plain `ERROR 5`) ends
+  in an address error at 0x9c0001. `prolog2()` in `lang/basic/src/gencode.c` calls
+  `__setjmp(env, savemask)` with the return address pushed first (as
+  `cemcom.ansi/eval.c` does for C) but no `savemask`; `__setjmp`
+  (`libcc.ansi/core/setjmp/setjmp.e`) takes the return address from
+  `PSIZE+WSIZE`. Tried in the scratch clone only (no go-ahead yet): `C_loc(0)`
+  before `env` and `asp` 2 pointers + 1 int; `ERROR 5`, INPUT and LINE INPUT at the
+  end and with stdin closed all print "caught <n>"; full build, all tests pass.
+
+### Small leftovers, 5b: B4 applied, with a test
+
+User:
+> yes commit B3, then apply B4 with the test
+
+- B3 committed (`78ab6e78d`, `b23b5389f`).
+- `lang/basic/src/gencode.c`, `prolog2()`: `C_loc(0)` (savemask) between the return
+  address and `env`; `asp` BEMPTRSIZE + BEMINTSIZE + BEMPTRSIZE.
+- Test `basic_onerror_test`: `plat/minix68k/tests/basic/onerror.bas` (ON ERROR GOTO
+  100, LINE INPUT at the end of stdin, the handler prints `err`/`erl` and raises
+  error 5, which ends the program) and `onerror.b.g`. `tests/build.py` takes our own
+  BASIC tests from `BASIC_OWN` next to `lang/basic/test`.
+- Checked (scratch clone): full build, all tests pass. The test fails with the old
+  `gencode.c` (emulator address error after "ERROR 2") and with the old `read.c`
+  (address error during the LINE INPUT recursion).
+
+### Small leftovers, 6: F9, build-system notes
+
+User:
+> yes commit (B4: `94be27f74`, `8f2be0337`)
+> i pushed (CI for `8f2be0337` passed: sanitizers 94 s, build-linux 57 s, clang 83 s)
+> start with F9, delete drone and travis
+
+- Deleted `.drone.yml` (teaci/msys32 image, `make +ack`) and `.travis.yml` (Ubuntu
+  trusty, macOS, `make +ack`): the `+ack` target no longer exists; CI is
+  `.github/workflows/ccpp.yml`.
+- `Makefile`: `PLATS ?= minix68k` instead of `$(error ...)` for a command-line
+  `PLATS`. Upstream added the error in `9a9f8ee1d` (2025, "variables set on the
+  command line don't trigger a build.mk regeneration"); `build/ab.mk` now writes
+  every make variable (command-line ones included) to `$(OBJ)/vars.txt` and removes
+  `build.ninja` when that changes. README: one line that PREFIX and PLATS can be
+  given on the command line.
+- `OBJ`: `build/_sandbox.py` (vendored from ab) links inputs into
+  `join(sandbox, path)` and runs commands there with relative paths, so `OBJ` must be
+  a relative path inside the tree. Not patched (it is ab's design); the `Makefile`
+  stops with "OBJ=...: must be a relative path inside the source tree" for an
+  absolute path, `~` or any `..`.
+- Checked (scratch clone): `OBJ=/abs/obj`, `../obj`, `a/../b`, `~/obj` each stop
+  with the message; default `make` builds and tests minix68k; `make PLATS="minix68k
+  pc86"` regenerates and builds pc86 too; `make` again regenerates without pc86 (0
+  pc86 targets in build.ninja); a further `make`: no regeneration, "no work to do".
+
+### F1b, 1: soft-float rounding (investigation; fix tried in a scratch clone)
+
+User:
+> i pushed (CI for `60825654f` passed: clang 85 s, build-linux 86 s, sanitizers 104 s)
+> start with F1b
+
+- Only `mach/m68k2/libem` uses `mach/proto/fp` in this fork. C programs ignore the
+  float overflow/underflow traps (`head_ac.e`: `sim` 1336), so overflow gives the
+  bit pattern of infinity without a trap.
+- Differential test (scratch, TestFloat-style): host program `gen.c` writes cases
+  `op a b result` (double and float `+ - * /`, double→float, long→double; random
+  bits, mantissas with many trailing zeros or ones for exact ties, close and far
+  exponents; a second mode with subnormal operands and results), the result from
+  host IEEE arithmetic; `check.c`, built with ACK for minix68k, recomputes them in
+  the emulator (about 3,700 cases/s) and prints every difference.
+- Old code: 18 of 20,000, 56 of 100,000 normal cases, 14 of 30,000 subnormal cases
+  differ, every one 1 ulp too low (an above-half case rounded as a tie, to even).
+  Causes: no sticky bit anywhere.
+  - `compact()` float: rounding looked only at `m1`, not `m2` (seen in double→float);
+  - `sft_ext()` (alignment for `+`/`-`) and the subnormal path in `compact()`
+    (`b64_rsft` + `b64_sft`) dropped the bits shifted out;
+  - `mul_ext()` rounded the 128-bit product at bit 64 (half up) and dropped the
+    rest: two roundings;
+  - `div_ext()` (bit loop, `USE_DIVIDE` not defined) dropped the remainder.
+- Fix tried (scratch clone only): `b64_jsft()` in `shifter.c`, a right shift that ORs
+  the lost bits into bit 0 (renamed `.b64_jsft` by `massage_s.lua`), used in
+  `sft_ext()` and for subnormals in `compact()`; `compact()` float rounding counts
+  `m2 != 0`; `mul_ext()` ORs the low 64 bits of the product into bit 0 instead of
+  rounding; `div_ext()` sets bit 0 when 64 quotient bits leave a remainder. At least
+  11 (double) or 40 (float) bits lie below the result, so one sticky bit is enough.
+- Result: 0 of 20,000 + 100,000 normal and 0 of 30,000 subnormal cases differ; full
+  build, all tests pass. Paranoia: "Multiplication/Division/Addition/Subtraction
+  appears to round correctly", "Sticky bit apparently used correctly"; FLAWs 2 → 1.
+- The remaining FLAW, "unbalanced range; UfThold * V = 4.000000000000001": Paranoia's
+  `V` is `7ff0000000000000`, infinity (host: `7fefffffffffffff`). Overflow already
+  gives infinity, but `extend()` treats exponent 2047 as an ordinary number
+  (2^1024), so arithmetic on infinity gives finite results and Paranoia's search
+  for the overflow threshold ends at infinity. NaN is not known either, and
+  `extend()` turns -0 into +0. `printf` prints infinity as 1.797693134862316e+308.
+
+### F1b, 2: step 1 applied (rounding), with a test
+
+User:
+> yes apply step 1
+
+- The scratch fix applied unchanged to `mach/proto/fp` (`shifter.c`, `FP_types.h`,
+  `massage_s.lua`, `sft_ext.c`, `compact.c`, `mul_ext.c`, `div_ext.c`).
+- Test `fp_test` (`plat/minix68k/tests`): `fpgen.c` (host program, the scratch
+  generator), `fpcheck.c` (minix68k, the scratch checker), `fpcheck.sh` runs seed 1
+  with 20,000 normal cases and seed 2 with 10,000 subnormal cases (about 8 s) and
+  fails on any difference, printing the first 20. `paranoia.sh`: `MAX_FLAWS` 1.
+- Checked: fresh clone, full build: all tests pass (`fp normal: 20000 cases, 0
+  differ`, `fp subnormal: 10000 cases, 0 differ`). With the old `mach/proto/fp`:
+  `fp_test` fails (18 differ) and `paranoia_test` fails (flaws=2, max 1). `fpgen`
+  with ASan+UBSan (strict) and with clang: no reports, identical output.
+
+### F1b, 3: step 2, infinity, NaN, -0 (tried in a scratch clone)
+
+User:
+> i pushed (CI for `aa22b0173` passed: clang 91 s, build-linux 92 s, sanitizers 126 s)
+> start with step 2
+
+- Representation: `EXT_INFNAN` (32767) as the EXTEND exponent; mantissa `NORMBIT`
+  for infinity, more bits (`EXT_QNAN` = NORMBIT + quiet bit) for NaN, so the
+  existing "mantissa 0 = zero" tests stay right. `EXT_ISNAN`/`EXT_ISINF`/
+  `EXT_ISZERO` in `FP_bias.h`.
+- `extend()`: exponent 2047/255 → `EXT_INFNAN`, NaNs made quiet; zeros keep their
+  sign. `compact()`: `EXT_INFNAN` → exponent all ones (a NaN keeps its top fraction
+  bits); zero written with its sign (was `zrf8`, always +0).
+- `add_ext()`: NaN in → NaN; inf + finite = inf; inf - inf = NaN; -0 + +0 = +0;
+  exact cancellation gives +0. `sub_ext()` is now "negate e2 and add" (the sign kept
+  as `0x8000`, as `extend()` sets it: `mul`/`div` combine signs with XOR).
+  `mul_ext()`: NaN; inf * 0 = NaN, inf * x = inf; 0 * x = signed 0; overflow in
+  EXTEND gives inf (was a zero mantissa, i.e. 0). `div_ext()`: NaN; inf/inf = NaN,
+  inf/x = inf, x/inf = 0, 0/0 = NaN (no trap), x/0 traps EFDIVZ as before and then
+  gives inf (was 0); the sign XOR moved to the top.
+- `adf4`/`adf8`: their shortcuts for a +0 operand returned the other operand,
+  wrong for -0 (-0 + +0 must be +0): removed. `ngf4`/`ngf8`: negate 0 too. `cmf4`/
+  `cmf8`: a NaN compares unequal to everything (EM's `cmf` has no "unordered", so
+  < or > holds for it). `fef4`/`fef8` (frexp): inf and NaN unchanged.
+- Bugs found on the way: (1) my first `sub_ext()` flipped the sign to 1, not
+  0x8000: 906 of 20,000 cases wrong; (2) in `extend()` bit 31 of the shifted
+  mantissa still holds the lowest exponent bit, so every infinity became a NaN
+  (`2 * inf` gave NaN; Paranoia's overflow search then ended at 2^-32: a SERIOUS
+  DEFECT); (3) old, in `cmf8()`: with opposite signs only the high words were
+  checked for zero, so the smallest subnormal compared below -0.
+- `fpgen.c`: mode `s`, operands often ±0, ±inf, NaN, the largest/smallest numbers
+  or large enough to overflow; also `f2d`, negation (`n`, `fn`) and comparison (`c`,
+  `fc`: a hex digit with bits for <, ==, >, !=). `fpcheck.c`: any NaN matches any
+  NaN; with a NaN only == and != are checked. `fpcheck.sh`: third set, seed 3, 10,000.
+- Results: normal 20,000 + 100,000, subnormal 10,000, special 11,704 + 93,485
+  cases: 0 differ; full build, all tests pass. Old code on the special set: trap 7
+  (0/0) ends the program, 20 differences before that. Paranoia: "No failures,
+  defects nor flaws have been discovered. The arithmetic diagnosed seems
+  Satisfactory." (host: "Excellent"; what remains is step 3: `sqrt` rounding,
+  `pow(0,0)`, `printf` of infinity, "Overflow saturates at V0 = 2.3e-10").
+- Not covered by tests: `fif` (modf) and `cfi`/`cfu` with infinity or NaN (they
+  take their existing overflow paths).
+
+### F1b, 4: step 2 applied
+
+User:
+> yes apply step 2
+
+- The scratch diff applied unchanged (15 files in `mach/proto/fp`, `fpgen.c`,
+  `fpcheck.c`, `fpcheck.sh`); `paranoia.sh`: `MAX_FLAWS` 0.
+- Checked: fresh clone, full build: all tests pass (fp normal 20,000, subnormal
+  10,000, special 11,704: 0 differ; Paranoia with no FLAW allowed). `fpgen` with
+  ASan+UBSan (strict) and with clang: no reports, identical output in all 3 modes.
+
+### F1b, 5: step 3, the C library (tried in a scratch clone)
+
+User:
+> i pushed (CI for `a783ea141` passed: clang 83 s, build-linux 90 s, sanitizers 197 s)
+> start with step 3
+
+- `printf` (`lang/cem/libcc.ansi/core/printf/doprnt.c`): numbers are rendered into
+  `static char buf[16]` (upstream `53a3630d2`, 2020: was `buf[1025]` on the stack,
+  too much for CP/M), and float precision was cut to 15 to "fit". But `%f` of 1e30
+  is 38 characters, of `DBL_MAX` 316, `%.15e` 23, `%lb` 32, `%.30d` 30: all written
+  past the buffer. Seen in the emulator: `printf("%f", DBL_MAX)` overwrote a
+  pointer with "000" and the program jumped to 0x303030. All platforms.
+  Fix: `buf[LDBL_MAX_10_EXP + 4 + MAXPREC]` (static, 440 bytes with 8-byte
+  doubles), precision cut to `MAXPREC` = 128 for floats and integers. `%.17e` now
+  gives 18 digits.
+- `fltpr.c`: infinity and NaN printed as `inf`/`-inf`/`nan` (`INF`/`NAN` for `%E`,
+  `%G`), with `+`/space flags; was digits of a huge number (`2.3e-10` for inf).
+- `pow.c`: `y == 0` first, so `pow(x, 0)` = 1 for every x, 0 included (C99/IEEE;
+  was 0 with EDOM). `pow(0, y < 0)` still EDOM, 0.
+- `sqrt.c`: Newton's method (5 steps with a division) replaced by an exact integer
+  square root: `frexp`/`ldexp` give x = M * 2^k (M an integer of 53/54 bits, k
+  even), the root of M * 2^52 is computed two bits at a time in pairs of 32-bit
+  words (53 steps), rounded up when the remainder exceeds the root (never a tie).
+  No byte order assumed; `sqrt(-0)` is -0 now. Host check of the same code against
+  glibc: 0 of 4,000,000 random (incl. subnormal) and 600,000 near perfect squares
+  differ.
+- Tests: `fpgen`/`fpcheck` ops `sq` (sqrt, exact) and `rt` (printf `%.16e`, then
+  strtod: the same double); about 5,000 such cases over the 3 sets. `paranoia.sh`
+  also requires the verdict "Excellent" (catches its warnings).
+- Results: all tests pass; Paranoia: "Square root appears to be correctly rounded",
+  no pow warning, "Overflow saturates at V0 = inf", "The arithmetic diagnosed
+  appears to be Excellent!" (as the host). With the old C library: fp normal 1,172,
+  subnormal 339, special 106 differ (sqrt last bit; round trip with 16 digits),
+  Paranoia `excellent=0`. `make PLATS="minix68k linux68k pc86"`: all pass (47
+  linux68k tests).
+- Measured, not fixed: `%.16e` (17 significant digits) differs from glibc in the
+  last digit in 12 of 5,000 random doubles (`_ext_str_cvt` works with 64-bit
+  extended precision); the round trip `printf`→`strtod` still gives the same
+  double in all 5,000, and ACK's `strtod` reads glibc's exact text right. Beyond 17
+  digits (`%.20e`, `%f` of big numbers) ACK prints zeros or approximate digits
+  (C only recommends exactness up to `DECIMAL_DIG`); an exact decimal tie
+  (`...124.8125` to 3 places) is rounded up, glibc to even.
+
+### F1b, 6: step 3 applied; F1b done
+
+User:
+> yes apply step 3
+
+- The scratch diff applied unchanged (`pow.c`, `sqrt.c`, `doprnt.c`, `fltpr.c`,
+  `fpgen.c`, `fpcheck.c`, `paranoia.sh`).
+- Checked: fresh clone, full build: all tests pass (fp normal 20,000, subnormal
+  10,000, special 11,601: 0 differ; Paranoia "Excellent"). `fpgen` with ASan+UBSan
+  and with clang: no reports, identical output in all 3 modes.
+- `Tasks.md`: F1b done; new F1c (17th printf digit, see step 3).
+
+### Upstream branches
+
+User:
+> i pushed (CI for `14fca3372` passed: build-linux 109 s, sanitizers 259 s, clang 104 s)
+> start with the upstream branches
+> leave out the minix68k it is for version1 which i expect nobody is using, we can
+> always point to my fork for interested parties
+> keep it, reword the message (tests-plat-wordsize)
+> yes fetch the branches
+> yes put the PR texts in the log
+
+- Upstream `default` (davidgiven/ack, `git ls-remote`) is still `7afa32a0a`, this
+  branch's fork point. Upstream has `plat/minix68k` and `mach/m68k2/libem`, but no
+  `mach/proto/fp` build and no minix68k tests; its tests run on cpm, linux68k,
+  linuxppc, pc86. Decision: only generic fixes go upstream; the minix68k series
+  stays in the fork (memory: upstream-scope).
+- Branches made in a scratch clone by cherry-pick (no `-x`: its line would follow
+  the Co-Authored-By trailer), then fetched into this repo:
+  `upstream/libc-fixes` (889c16e4f, f39e6910a), `upstream/ego-fixes` (34019b8ff,
+  76abdb282), `upstream/ub-fixes` (a648a2838, b5c8d7cbe, a8c7ee66e, 80fc1fa37
+  without its `basic.g` line, 47dc594be, ddb15dd2c, 6ba184220, 01f77a5d4),
+  `upstream/basic-fixes` (4c4cafd9a, b9831450b, 8a2103d9b, 78ab6e78d, 94be27f74,
+  without their `plat/minix68k/tests` parts; the DATA commit takes the `"%s"` fix
+  for its rewritten line and says so; the ON ERROR commit shows a 3-line BASIC
+  example instead of the fork's test), `upstream/tests-plat-wordsize` (1159d464e,
+  message reworded without minix68k). All five merge together without conflicts
+  and contain no fork-only files.
+- Full upstream builds (`PLATS = all` and upstream's tests): the first attempt of
+  the baseline and the combined build in parallel ran out of `/tmp` inodes; rerun
+  one after the other: the baseline alone used all 1,048,576 inodes, so a full
+  `PLATS = all` build does not fit in this `/tmp`. Checked instead with the
+  platforms upstream tests (`PLATS = cpm linux68k linuxppc pc86` in the clone's
+  Makefile): plain `default` and `default` with all five branches merged both pass
+  all 193 tests (200 s / 202 s, about 517,000 inodes each).
+- PR texts (for the user to open the PRs):
+
+#### Upstream PRs (davidgiven/ack, base `default`)
+
+Each branch is based on `default` at 7afa32a0a and is independent; all five
+merge together without conflicts. Found while making the minix68k target
+usable in my fork (https://github.com/maarten-boot/ack, branch
+`rosco-minix68k`); only the generic fixes are offered here.
+
+
+#### upstream/libc-fixes — libcc.ansi: printf buffer overflow, exact sqrt, pow(x, 0), inf/nan, fflush
+
+- **printf overflowed its number buffer.** Since 53a3630d2 numbers are
+  rendered into `static char buf[16]`, and float precision is cut to 15 to
+  fit. But `%f` of DBL_MAX is 316 characters, `%f` of 1e30 38, `%.15e` 23,
+  `%lb` 32, `%.30d` 30: all written past the buffer. `printf("%f",
+  DBL_MAX)` crashed a program. The buffer now has room for `%f` of the
+  largest long double with 128 digits after the point (static, about 440
+  bytes with 8-byte doubles, so still nothing on the stack); precision is
+  cut to 128 for floats and integers. `%.17e` gives the 18 digits asked for.
+- printf prints infinity and NaN as `inf`, `-inf`, `nan` (`INF`/`NAN` for
+  `%E`/`%G`).
+- `pow(x, 0)` is 1 for every x, 0 included (C99, IEEE 754).
+- `sqrt` is correctly rounded: an exact integer square root of the mantissa
+  (two bits at a time, in pairs of 32-bit words, no byte order assumed)
+  replaces Newton's method (errors of -0.60 to +0.50 ulp). Checked against
+  glibc: 0 differences in 4,000,000 random values (subnormals included) and
+  600,000 values at and next to perfect squares.
+- `fflush()` on a stream being read must give the unread buffered bytes
+  back to the file, but seeked forward over them instead of back: they were
+  skipped (since d87444a7f, 1990). The BASIC runtime flushes before every
+  READ, so with DATA in a file every second DATA line was lost.
+
+With these (and correct soft-float arithmetic in my fork) Kahan's Paranoia
+says "Excellent", as on the host.
+
+#### upstream/ego-fixes — ego: inliner lost functions at -O4; cs NULL dereference
+
+- **il:** `cl_flags` holds bit flags (CLF_SELECTED 020, CLF_EVER_EXPANDED,
+  CLF_FIRM, the parameter count) but was declared `bool`; since "Use stdbool
+  throughout" (0782bc80e) that is a `_Bool`, so `SELECTED()` stored 1 and
+  `IS_SELECTED()` never matched. `cleancals()` then dropped every selected
+  call after `singles()` had marked the callee for removal: at -O4 and up a
+  static function called once lost its body while the call stayed
+  ("Undefined: __II0" at link time). Now `byte`.
+- **cs:** `gains()` looked at the instruction before an "addressing mode"
+  expression; when the expression starts a basic block that is NULL (seen
+  with `adp 1` in tests/plat/core/exg). It is now not eliminated.
+
+#### upstream/ub-fixes — undefined behaviour and robustness fixes (host tools)
+
+Found with ASan/UBSan and clang builds of the host tools running the tests:
+
+- em_opt looked up pseudo-instructions in `em_flag[]`, which only covers
+  instructions (read 25 bytes past the table; whether `sp_cend` was written
+  depended on the bytes after it);
+- signed shifts that are undefined (LLgen sets, both `arith.h`, the
+  `cstoper.c` files, peephole, fillem, cset, Musashi);
+- tabgen's `getln()` wrote before its buffer on a long line;
+- printf formats: argument types, and text passed as the format (a `%` in a
+  name or source line was read as a conversion);
+- a two-statement macro, misleading indentation, negative shifts;
+- tables indexed with (signed) `char`;
+- m2: two `!a & b` meant as `!(a & b)` (a missed "statement not reached");
+- Makefile: build the host tools with `-fno-strict-aliasing`: the C front
+  end type-puns its free lists (modules/src/alloc/alloc.h) and the Modula-2
+  front end its set reference counts (lang/m2/comp/chk_expr.h), which
+  clang -Os already miscompiles.
+
+#### upstream/basic-fixes — ACK BASIC: ON ERROR, LINE INPUT, ^, DATA
+
+- **ON ERROR GOTO jumped to a garbage address:** the program prologue called
+  `__setjmp(env, savemask)` without `savemask`, so the return address was
+  read from the wrong place.
+- **LINE INPUT at the end of stdin** recursed (with "?Redo") until the stack
+  was gone; now error 2 / 29 like INPUT.
+- **`^` computed exponent ^ base** since the 2013 rewrite (`n ^ .5` gave
+  `.5 ^ n`).
+- **DATA kept in the program:** the compiler wrote DATA to `<source>.bas.d`
+  and every program opened that file at start-up by its compile-time name, so
+  a BASIC program only ran where it was compiled (examples/hilo.bas: "File
+  not found"). Now the DATA text is emitted as a rom string and READ/RESTORE
+  read it there.
+- The DATA file name was emitted as a pointer instead of its length.
+
+#### upstream/tests-plat-wordsize — tests/plat: word-size and byte-order clean
+
+aar, cii, inn and rck assumed EM_WSIZE == EM_PSIZE or a little-endian
+machine (pointer compares with the word size, expected values built for
+little-endian, a 4-byte argument to fail()). Results unchanged on
+linux68k, pc86, cpm and linuxppc.
+
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+### P2: the minix project builds this fork (proposal; checked in a scratch copy)
+
+User:
+> start with P2
+
+Read-only look at `../minix-st-2.0.4/src/rosco/ack` (nothing changed there):
+`build-ack.sh` clones davidgiven/ack at `7afa32a0a` and applies
+`ack-minix68k.patch`; `Makefile` (host, lib, pass, ccproto) uses
+`ack/.obj/staging`, `mkpass.py` builds the passes as Minix programs from the target
+paths in `ack/.obj/build.ninja`; `acc-minix` links `crtso.o emrts.o <objects>
+libc.a libem.a libend.a` (Minix's C library, ACK's libem/libend).
+
+- The patch is all in this fork: `mach/m68020/ncg/mach.c`, `mach/m68k2/as/mach1.c`,
+  `mach5.c`, `plat/minix68k/cv/cv.c` identical (`git apply -R --check`);
+  `Makefile` (PLATS/DEFAULT_PLATFORM) and `maketempfile.c` (Minix, plus F7) in
+  another form. The fork changed no target paths `mkpass.py` uses.
+- Upstream's m68k2 libem has `fp68881.s`: float code on the board would run 68881
+  instructions (F-line trap on the 68010). The fork's libem has the soft-float.
+- Proposed change (for the project's owner), `src/rosco/ack`:
+  - `build-ack.sh`: `ACK_URL` https://github.com/maarten-boot/ack.git, `ACK_REV`
+    `14fca33720e16be2ffb1509cd35c90e12b2a30f2` (tag minix68k-20261030), no
+    `git apply`; header comment: what the fork includes, that `make` also runs the
+    minix68k tests (a few minutes, coreutils `timeout`), remove `ack/` to change
+    revision;
+  - `Makefile`: `$(STAGING)/bin/ack: build-ack.sh` (no patch dependency);
+  - delete `ack-minix68k.patch`.
+- Checked in a scratch copy (`include`, `src/lib`, `src/rosco/{lib,include,ack}`,
+  the `src/{fs,mm,kernel}` headers): the changed `build-ack.sh` with `ACK_URL` =
+  this repository builds the fork; `make -C lib` builds Minix 2.0.4's `libc.a`,
+  `crtso.o`, `emrts.o` without errors; a float program linked as `acc-minix` does
+  (plus the pieces below) runs in this fork's emulator and prints the same as the
+  host (1/3, a sum of 1000 terms, 0.1+0.2 == 0.3).
+- Found in that check:
+  - **cpp.ansi overflow (this repo, all platforms):** `preprocess.c` writes `#line`
+    directives into `char Xbuf[256]` with `sprintf`; a source or header path of
+    about 240+ characters aborts the preprocessor ("buffer overflow detected"; the
+    scratch copy's long paths made 4 `cv_test` cases fail). `replace.c`'s
+    `FilNamBuf[PATHLENGTH]` for `__FILE__` lacks room for the two quotes and the NUL.
+    Not fixed yet (needs a go-ahead).
+  - **minix project:** its `lib/Makefile` puts only the stubs `fphook/fltpr.o` and
+    `strtod.o` ("cannot print floating point") into `libc.a` and builds no float
+    library from `fphook/fphook.c`, and leaves out `src/lib/math` (`ldexp`,
+    `hugeval`, `isnan`; its `frexp.s` is i86/i386 only, ACK's `frexp.e` works): no
+    program on the board can printf a float today, whichever ACK. Its `ncrtso.s`
+    does not ignore the float traps as ACK's C start-up does (`sim` 1336), so a
+    float overflow ends the program ("trap 4") instead of giving infinity.
+
+### A container for the ACK
+
+User:
+> for compiling the minix and the bbc code we could host the ack in a docker
+> container, minix itself will add the ack c compiler to its tree for development
+> inside minix, am i right ?
+> yes write the Dockerfile
+
+- Two uses: the cross compiler on Linux (bbcbasic needs only the staging tree; the
+  minix project's `mkpass.py` also needs the source and build tree with
+  `build.ninja`), and the passes built as Minix programs (by `m68k-elf-gcc -mshort`
+  in the rosco toolchain container) that the minix project puts on the SD card,
+  linked with Minix's libc and this fork's libem/libend.
+- `plat/minix68k/docker/Dockerfile`: `debian:trixie-slim` pinned by digest
+  (`sha256:f6b08b09…`, 2026-10-27); bison, flex, gcc, git, lua5.4, make,
+  ninja-build, python3; clones `ACK_URL` (default this fork) at `ACK_REV` (default
+  tag `minix68k-20261030`), `make` (builds and runs the minix68k tests), keeps
+  `/opt/ack` whole; `ACKDIR` and `PATH` set, `minix68k-emu` on the path, workdir
+  `/src`. Committed before the first test build finished (user's request).
+- First test build: `git clone` in the container fails, "server verification failed:
+  certificate signer not trusted": this network inspects TLS (the host has
+  `PA-Root-CA.crt` and `forward-trust-*.crt` in `/usr/local/share/ca-certificates`,
+  the container does not). Not a Dockerfile fault; a normal network or GitHub's
+  runners clone fine.
+- Tested with a copy of the Dockerfile that copies a local checkout at
+  `minix68k-20261030` instead of cloning: build and minix68k tests in 111 s; run as
+  the user with a mounted directory, `ack -mminix68k` compiles C (`sqrt(2) =
+  1.414213562373095`) and BASIC (`2^10` = 1024), both run in `minix68k-emu`, files
+  owned by the user; `ACKDIR`, `build.ninja` in place. Image 1.13 GB (the whole
+  build tree).
+- User: "i stopped the proxy stry again". The committed Dockerfile unchanged: clone
+  from GitHub at `minix68k-20261030`, build and 95 tests in 105 s; the image
+  compiles and runs a C program (`0.1 + 0.2` = 0.30000000000000004).
+- Found with that program: `printf("%.17g", 0.1 + 0.2)` gave 0.29999999999999999.
+  The run-time soft-float is right (`a + b` with volatile operands:
+  `3fd3333333333334`, printed 0.30000000000000004, as the host); the constant
+  `0.1 + 0.2` folded by the compiler is `3fd3333333333333`, 1 ulp low (gcc folds to
+  `...334`). ACK's compile-time float arithmetic is not IEEE-rounded: new F1d.
+- `git -C /opt/ack describe` as a non-root user: "detected dubious ownership"
+  (the tree belongs to root). Harmless for compiling.
+- User: "yes add the safe.directory line and commit". Dockerfile: `git config
+  --system --add safe.directory /opt/ack`. Rebuilt (127 s); `git -C /opt/ack
+  describe --tags` as the user: `minix68k-20261030`.
+
+### Wrap-up: CI and the upstream PRs
+
+- User: CI for `45af3ff79` succeeded (all three jobs).
+- User pushed the five `upstream/*` branches to the fork and opened the PRs on
+  davidgiven/ack (checked with `git ls-remote` and the GitHub API; heads match the
+  local branches):
+  - #375 `upstream/basic-fixes` (b83a4b45d)
+  - #376 `upstream/tests-plat-wordsize` (1155d5a4f)
+  - #377 `upstream/ub-fixes` (1c1a655da)
+  - #378 `upstream/ego-fixes` (138489ccd)
+  - #379 `upstream/libc-fixes` (e6e11b09d)
+- #375, #377, #378 and #379 carry GitHub's default title (the branch name); the
+  intended titles are in the PR texts above.
+
+### N10: long file names in cpp.ansi
+
+- User: "start with the cpp.ansi fix", then "yes apply".
+- `preprocess.c`: the global `char Xbuf[256]` is gone. A new `line_dir(n)` macro
+  formats only the prefix and the line number (`# 123 "`) into a local
+  `lbuf[32]`, echoes the file name and then `"` and a newline; the first directive
+  and `do_line_dir` both use it.
+- `replace.c`: `__FILE__` is built in a `static char *FilNamBuf` that is
+  `realloc`ed to `strlen(FileName) + 3` (was `[PATHLENGTH]`, 3 bytes short).
+- Test `lang/cem/cpp.ansi/longpath.sh`, rule `lang/cem/cpp.ansi+test`, part of
+  `all` (not on Windows): a 600+ character path with an `#include`, and a
+  2000-character `#line` name; every line directive and `__FILE__` must carry the
+  full name. First run: `__FILE__` is written as `char *f =  "name" ;`, so the
+  check now ignores spacing.
+- The old cpp.ansi (HEAD's preprocess.c and replace.c) on the test: "buffer
+  overflow detected", exit 134, in both cases. The fixed one: passes.
+- Tasks.md: N10 (done), N11 (file names are not escaped in line directives and
+  `__FILE__`; old, not touched).
+- Full `make PLATS=minix68k` in a scratch copy: exit 0, no `@@FAIL`, 95 tests
+  run in the second pass (the cpp.ansi test and the minix68k tests), as in the
+  Docker build. `macro_func()`'s text is copied by `macro2buffer()` right away, so
+  `realloc` moving `FilNamBuf` leaves no stale pointer; `__FILE__` cannot be
+  `#undef`ed (NOUNDEF), so it is never freed.
+
+### The ACK 6.0 pre-release branches
+
+- User: "there exists an attempt at a v6 for ack at
+  .../tree/release-6-0-pre-4; if there is anything useful there for us we could add
+  it to a todo list".
+- `git ls-remote` of davidgiven/ack: branches `release-6-0-pre-1`, `-pre-3`,
+  `-pre-4`, tags `release-6-0-pre-1` to `-pre-5`. `release-6-0-pre-4` is both a
+  branch (7273130b4, 2010-08-04, a cvs2hg fixup commit for the tag) and a tag
+  (9d2d5606e); a plain `git fetch ... release-6-0-pre-4` picked the tag.
+- Fetched each into FETCH_HEAD (no refs added): `git rev-list --count
+  7afa32a0a..<ref>` is 0 for all of them; `default` has 2023 commits after
+  `-pre-4`. The pre-releases are ancestors of `default`: nothing that this fork
+  (based on `default`) lacks. Noted under "Checked, not a problem" in Tasks.md.
+
+### upstream/cpp-longpath: a sixth upstream branch
+
+- User: "yes make the upstream branch". `upstream/cpp-longpath` at 7afa32a0a with
+  0065e1ead cherry-picked (no conflicts): 509093957. Built in a scratch worktree;
+  upstream's Makefile refuses `PLATS` on the command line, so line 13 of the
+  worktree's Makefile was set to `PLATS = cpm linux68k linuxppc pc86` (not
+  committed).
+- User: "yes put the PR text in the log".
+
+#### upstream/cpp-longpath — cpp.ansi: no length limit on file names in line directives and __FILE__
+
+- **Line directives** were formatted with `sprintf` into `char Xbuf[256]`
+  (`preprocess.c`), so a source path of about 245 characters or more overran
+  it and the preprocessor crashed (glibc: "buffer overflow detected"). Now only
+  the prefix and the line number go through a small buffer; the file name is
+  echoed after it, so it can be any length.
+- **`__FILE__`** was built in `FilNamBuf[PATHLENGTH]` (`replace.c`): the name
+  plus two quotes and the terminating zero is 3 bytes more than a name of
+  `PATHLENGTH`, and a `#line` name can be longer still. It now gets a buffer of
+  the name's length (`realloc`); the text is copied by `macro2buffer()` right
+  away and `__FILE__` cannot be `#undef`ed, so moving the buffer is safe.
+- **Test** `lang/cem/cpp.ansi/longpath.sh`, rule `lang/cem/cpp.ansi+test`, part
+  of `all` (not on Windows): a file in a directory more than 600 characters deep
+  that uses `__FILE__` and `#include`s a header, and a file with a
+  2000-character `#line` name. Every line directive and `__FILE__` must carry
+  the full name. The old cpp.ansi aborts on both cases.
+- Four-platform build of `upstream/cpp-longpath` (cpm linux68k linuxppc pc86):
+  exit 0 in 3m09s, no `@@FAIL`, 194 tests (the 193 of the earlier baseline plus
+  `lang/cem/cpp.ansi+test`). Scratch worktree removed afterwards.
+
+### F1d: float constant folding (investigation)
+
+- User: "start with F1d". Scratch build of the minix68k compiler and emulator.
+- Path of a float constant in cemcom.ansi: literal -> `flt_str2flt` (flt_arith,
+  64-bit mantissa) -> folded with `flt_add/sub/mul/div` (`fltcstoper.c`) ->
+  `flt_flt2str` (18 digits) -> EM `rom` fcon -> back end `float_cst`
+  (`h/con_float`) parses it again and rounds to 24/53 bits, half-up.
+- Probe (scratchpad `f1dgen.py`): 300 random pairs, each as literals and folded
+  with + - * /, double and float; compiled for minix68k, bits compared with
+  Python's IEEE. Literals: 0 of 600 wrong. Folded: d+ 32/300, d- 49, d* 86,
+  d/ 97; f+ 32/300, f- 42, f* 112/288, f/ 95/283 wrong, all by 1 ulp.
+- Causes:
+  1. Folding is done on the 64-bit values: operands are not rounded to their
+     type first, and the result is rounded only once at the end (0.1 + 0.2
+     gives the double nearest 0.3, not IEEE's 0.30000000000000004).
+  2. A float constant keeps 64 bits: `(double)0.1f` gives 3fb999999999999a
+     (double 0.1), not 3fb99999a0000000; `float2float()` only changes the type.
+  3. `int2float()` of a constant is not rounded: `(double)(float)16777217L`
+     gives 16777217.
+  4. `float_cst()` rounds half-up, not to even: `9007199254740993.0` gives
+     2^53+2, `16777217.0f` 16777218.
+  5. flt_add/mul/div truncate (no sticky bit), so rounding their 64-bit
+     result to 53 bits can still be wrong in rare ties.
+- pdpv7 (PDPFLOAT): double has a 56-bit mantissa, so precision cannot be
+  derived from the size alone. lang/m2/comp/cstoper.c folds the same way.
+
+### F1d step 1: flt_arith rounds correctly (sticky bit, flt_rnd)
+
+- User: "yes apply step 1".
+- `flt_add.c`: a new `sft_lost()` shifts and reports whether bits fell off; the
+  aligned operand's lost bits and a carry's lost bit become a sticky lowest bit
+  (rounding to odd); in a subtraction the result is first lowered by one unit
+  (the exact difference is a little less).
+- `flt_mul.c`: the lower 64 bits of the 128-bit product are a sticky bit
+  (was: rounded half-up at 64 bits).
+- `flt_div.c`: a non-zero remainder is a sticky bit (was: truncated).
+- New `flt_rnd.c`: `flt_rnd(e, bits, emin)` rounds to nearest, ties to even, with
+  fewer bits below 2^emin (subnormals). Declared and documented in
+  `flt_arith.h` and `flt_arith.3`. Correct for operands rounded by `flt_rnd`
+  (at most 62 bits): for wider operands an exponent difference of 1 with
+  cancellation can lose the sticky bit, which does not happen once the operands
+  have at most 62 bits.
+- New test `modules/src/flt_arith/ieeetest.c` (rule `modules/src/flt_arith+test`,
+  part of `all`): random double and float operands (any magnitudes, close
+  magnitudes, short mantissas for exact results and ties, subnormal products and
+  sums), `flt_add/sub/mul/div` then `flt_rnd`, against the host's IEEE result:
+  1,580,135 of 1,580,135 equal. With HEAD's add only 3 wrong, mul only 24, div
+  only 38, all three 65.
+- The module's old `test.c` (decimal in and out) passes with the new code as
+  with the old. Literal probe with the rebuilt compiler, seeds 1-5: 3000 of
+  3000 literals exact; folding still wrong (step 2).
+- Full `make PLATS=minix68k` in a fresh scratch copy: exit 0, 97 tests, no
+  `@@FAIL`. `Amake.srclist` left alone (unused; lists files that no longer exist).
+
+### F1d step 2: cemcom.ansi rounds float constants to their type
+
+- User: "start with step 2" (plan given), then "yes apply step 2".
+- `fltcstoper.c`: new `fltcstround(expr)` rounds a constant with `flt_rnd()` by
+  the size of its type: 4 bytes 24 bits (subnormals below 2^-126), 8 bytes 53
+  bits (below 2^-1022), other sizes left alone; with `-Vm<n>` (non-IEEE target)
+  8 bytes have n bits and there are no subnormals. Called for a literal
+  (`float2expr()`, expr.c), a folded result (`fltcstbin()`), `int2float()` and
+  `float2float()` (arith.c; the latter only changed the type).
+- `options.c`: `-V` letter `m` sets `flt_dbl_bits`; `cemcom.ansi.1` documents it;
+  `plat/pdpv7/descr`: `var CC_ALIGN=-Vm56` (PDP-11 double, 56 bits).
+- First run: probe 0 wrong (5 seeds), but two literal ties wrong:
+  `9007199254740993.0` and `16777217.0f`. Cause: `flt_str2flt` scales the digits
+  by multiplying with reciprocal powers of ten (inexact); with step 1's sticky
+  bit even `"1.0"` and `"0.5"` came out as "exact value + sticky", which tips
+  a tie. Fix in `flt_str2fl.c` `add_exponent()`: divide by `s10pow[i]` (10^0 to
+  10^27, exact) for negative exponents; larger ones still multiply by
+  `r_big_10pow` after that. And digits that do not fit in 64 bits (more than
+  about 19) set the sticky bit (were dropped silently). Remaining limitation:
+  a literal of more than 19 significant digits that is exactly a tie
+  (`1.000000059604644775390625`) is judged on its first 19 digits.
+- Results: flt_arith `ieeetest` 1,580,135 equal, old `test.c` ok; probe seeds
+  1-8: 23,777 constants, 0 wrong (before: 11-39% of the folded ones); 22
+  special cases equal to gcc: `(double)0.1f`, `0.1f * 3.0`, `0.1 + 0.2`, ties
+  (`9007199254740993.0`, `16777217.0f`, `(float)16777219L`, half the smallest
+  subnormal), subnormal results (double and float), `0.1f == 0.1` (0),
+  `0.5f == 0.5` (1).
+- `-Vm56` with cemcom run directly: `0.1 + 0.2` gives `3.00000000000000003e-1`
+  (56 bits) instead of `3.00000000000000044e-1`; the float is unchanged.
+- Full `make PLATS=minix68k` in a fresh scratch copy: exit 0, 97 tests (paranoia,
+  fp, BASIC, cv, cpp.ansi, flt_arith included), no `@@FAIL`.
+
+### F1d step 3: tests
+
+- User: "start with step 3" (plan given), then "yes apply step 3".
+- Generic test `tests/plat/floats/constfold,e,.c` (floats set: linuxppc upstream,
+  minix68k here), test library only: folded constants compared with the same
+  expression from volatile operands at run time (`0.1 + 0.2`, the probe's
+  wrong + - * / cases, double and float), float precision (`(double)0.1f`,
+  `0.1f * 3.0`, `0.1f == 0.1`, `0.5f == 0.5`), the exact `0.1 + 0.2`, ties
+  (`9007199254740993.0`, `9007199254740995.0`, `16777217.0f`,
+  `(float)16777217L`, `(float)16777219L`) and subnormal results. Values stored in
+  volatiles so the comparisons are not folded. Passes on minix68k; with the
+  compiler before step 1 (f4bef8f2b) 20 of its 26 checks fail (lines 22-32,
+  35-37, 41, 42, 45, 47, 48, 53).
+- Fork test `plat/minix68k/tests/fold.sh` + `foldgen.py`, rule `fold_test` (in
+  `tests`): the scratch probe made permanent, 300 random pairs per seed (seeds
+  1-3), literals and folded + - * / as double and float, now with tiny literals
+  for subnormal results (about 34 double and 43 float subnormal results and 160
+  zeros per seed); bits compared with Python's IEEE values. 8,793 constants,
+  0 wrong.
+- Full `make PLATS=minix68k` in a fresh scratch copy (committed tree): exit 0,
+  99 tests (the 97 before plus constfold and fold_test), no `@@FAIL`.
+
+### upstream/float-fold: a seventh upstream branch
+
+- User: "yes make the upstream branch". `upstream/float-fold` at 7afa32a0a with
+  c0cb9686d, 5edb1704c and 469e9bc9f cherry-picked: 6cad7e617, 57d988216,
+  f798121cc. One conflict, in the top-level `build.py` (upstream has no
+  `lang/cem/cpp.ansi+test`): `all` there gets only `modules/src/flt_arith+test`.
+  The fork-only `fold_test` (minix68k) is not included. Scratch worktree with
+  line 13 of the Makefile set to `PLATS = cpm linux68k linuxppc pc86` (not
+  committed).
+- User: "yes put the PR text in the log".
+
+#### upstream/float-fold — Floating constants folded as the target computes them
+
+- **Problem:** cemcom.ansi keeps float constants in flt_arith's 64-bit mantissa,
+  folds them at that precision and rounds to the target type only when it writes
+  them out. A folded constant could then differ from the same computation at
+  run time: in a probe of 300 random pairs, 11-39% of folded `+ - * /` results
+  (double and float) were 1 ulp off. `0.1 + 0.2` gave the double nearest 0.3,
+  not `0.30000000000000004`. A float constant also kept 64 bits, so
+  `(double)0.1f` was the double 0.1 and `0.1f == 0.1` was true.
+- **flt_arith (commit 2):** add, sub, mul and div keep what does not fit as a
+  sticky lowest bit (round to odd): the bits shifted out of the smaller operand
+  in add/sub, the lower half of mul's 128-bit product (was rounded half-up),
+  div's remainder (was dropped). New `flt_rnd(e, bits, emin)` rounds to `bits`
+  bits, to nearest and ties to even, with subnormal numbers below `2^emin`.
+  With operands and result rounded by `flt_rnd`, a result is what IEEE
+  arithmetic gives. Documented in `flt_arith.3`.
+- **cemcom.ansi (commit 3):** every float constant is rounded to its type with
+  `flt_rnd()`: a literal, a folded result, an integer converted to a floating
+  type, and a conversion between floating types. A 4-byte type is IEEE single
+  and an 8-byte type IEEE double, subnormal numbers included. For targets
+  without IEEE floating point, the new `-Vm<n>` gives the mantissa bits of an
+  8-byte type; pdpv7 (PDP-11 floating point, 56 bits) uses `-Vm56`. Documented
+  in `cemcom.ansi.1`.
+- **flt_str2flt (commit 3):** negative exponents were applied by multiplying
+  with reciprocal powers of ten, which is not exact; with the sticky bit even
+  `1.0` came out as slightly more than 1, and an exact tie like
+  `9007199254740993.0` rounded the wrong way. It now divides by the exact powers
+  10^0 to 10^27, and digits that do not fit in 64 bits set the sticky bit
+  instead of being dropped. (A literal with more than 19 significant digits that
+  is exactly a tie is still judged on its first 19 digits.)
+- **Tests:**
+  - `modules/src/flt_arith/ieeetest.c`, rule `modules/src/flt_arith+test`, part
+    of `all` (not on Windows): 1,580,135 random double and float operations
+    (subnormal results, exact results and ties included) against the host's
+    IEEE arithmetic. The old add, mul and div give 3, 24 and 38 wrong results.
+  - `tests/plat/floats/constfold,e,.c` in the floats set (run on linuxppc):
+    folded constants compared with the same expressions computed at run time,
+    and with exact values: `+ - * /` of double and float, float precision of
+    float constants, `0.1 + 0.2 == 0.30000000000000004`, ties rounded to even
+    and subnormal results. With the compiler before this PR, 20 of its 26
+    checks fail. Operands are plain globals, not volatile: the powerpc ncg
+    table has no pattern for the `nop` cemcom.ansi emits after a volatile
+    access (a separate fix).
+- **linuxppc emulator (commit 1):** constfold is the first test that
+  multiplies, or does single-precision arithmetic, at run time on linuxppc,
+  and the emulator (`plat/linuxppc/emu/instructions.dat`) could not run it.
+  `fmul` was decoded as X-form with FRB, but it is A-form with FRA and FRC
+  (as the assembler, `mach/powerpc/as/mach3.c`, encodes it): any multiply
+  with FRC not f0 stopped with "unimplemented instruction", and one that
+  matched computed FRA × FRB. `fadds`, `fsubs`, `fmuls` and `fdivs`
+  (opcode 59) were missing; they compute in double and round to float,
+  which is exact for these operations.
+- **Not changed:** the back ends' `float_cst` (`h/con_float`) still rounds
+  half-up when it converts the constant text; the constants it now gets are
+  already rounded, so that has no effect on IEEE targets. The Modula-2 front end
+  folds with flt_arith too and is not changed here.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- Four-platform build of `upstream/float-fold` (cpm linux68k linuxppc pc86):
+  exit 2. linuxppc cannot compile `constfold,e,.c`: "No table entry for 86"
+  (`op_nop`). cemcom.ansi emits `nop` after a volatile read (`eval.c:732`) and
+  `mach/powerpc/ncg/table` has no `pat nop`; every other ncg table has one. Not
+  caused by the float changes: `volatile int v; int f(void){return v;}` fails the
+  same way. No other test in tests/plat uses volatile. The fork's CI builds only
+  minix68k (m68020 has `pat nop`), so rosco-minix68k is not affected. The user
+  had already pushed `upstream/float-fold` (f798121cc); the PR is not opened.
+- User: "yes apply" (proposal: constfold without volatile; powerpc `nop` as new
+  task N12, a separate upstream fix). `constfold,e,.c`: operands and results in
+  plain globals (cemcom.ansi does not carry a global's value into a constant).
+  N12 added to Tasks.md.
+- Rerun: constfold now compiles on linuxppc but the emulator stops at
+  `0xfc8300b2` (opcode 63, `fmul`): `instructions.dat` decodes fmul as X-form
+  with FRB, while it is A-form with FRA and FRC (`mach3.c:626`). After that,
+  `0xec62082a` (opcode 59, `fadds`): no single-precision arithmetic at all.
+  No earlier tests/plat test multiplied or did float arithmetic at run time.
+- User: "yes apply" (proposal: emulator fix as its own commit, in the fork and
+  as the first commit of `upstream/float-fold`; rebuild the branch; force-push).
+  `instructions.dat`: fmul as `<63--><FRT><FRA>.....<FRC><25->`, and fadds,
+  fsubs, fmuls, fdivs (opcode 59) computed in double and rounded to float.
+- Clean four-platform build (worktree at f798121cc plus the emulator fix and the
+  new constfold): exit 0 in 4m13s, no `@@FAIL`, 195 tests (the 193 of the
+  baseline plus `modules/src/flt_arith+test` and linuxppc constfold).
+  constfold without volatile also passes on minix68k (scratch build).
+- PR text above updated (constfold without volatile, the emulator commit).
+- User: "yes commit". rosco-minix68k: b671803d1 (emulator), 422a397d4 (constfold
+  without volatile), fc42e9aca (log, N12). `upstream/float-fold` rebuilt at
+  7afa32a0a: dcd015359 (emulator), 3312e5d9b (flt_arith), 56beb86fc
+  (cemcom.ansi), 5039af8bb (constfold, without volatile); its tree is the one
+  the clean four-platform build tested. Needs a force-push. Scratch worktree
+  removed.
+- User pushed and opened the PR: `upstream/float-fold` at 5039af8bb is
+  davidgiven/ack#381, "Floating constants folded as the target computes them".
+  Open upstream PRs from the fork now: #375-#381.
+
+### N12: volatile on powerpc and mips
+
+- User: "start with N12". `volatile int v; int f(void) { return v; } void g(void)
+  { v = 1; }` compiled with -O for every buildable upstream platform: fails on
+  linuxppc and osxppc (powerpc ncg: "No table entry for 86") and linuxmips (mcg:
+  "treebuilder: unknown simple instruction 'nop'", abort); cpm, em22, linux386,
+  linux68k, minix68k, msdos386, msdos86, osx386, pc86, pdpv7, rpi compile it.
+  (qemuppc has no build.py upstream.) Every other ncg table has `pat nop`, all
+  with `kills ALL`, some with a debug call.
+- /tmp ran out of inodes during the all-platform build (tmpfs); the user
+  rebooted the host, /tmp is now on the root file system.
+- User: "yes apply". `mach/powerpc/ncg/table`: `pat nop` with `kills ALL`
+  (EM specials). `mach/proto/mcg/treebuilder.c`: `case op_nop:` ignored, like
+  `op_lni`. New `tests/plat/core/volatile,e,.c` in the core set: volatile char,
+  int, long, unsigned read, written, `++`, `+=`, `*=`, `--`; a write through a
+  plain pointer then a read; a read in a loop. No double (core also runs on cpm
+  and pc86).
+- Upstream tree (7afa32a0a plus the change), `PLATS = all`: exit 0 in 8m43s, no
+  `@@FAIL`, 197 tests (the 193 baseline plus volatile on cpm, linux68k, linuxppc,
+  pc86). The new test compiles with -O for all 14 buildable platforms (osxppc
+  and linuxmips have no test runner).
+- Fork (`make`, minix68k): exit 0, 100 tests (99 plus volatile), no `@@FAIL`,
+  fold seeds 1-3 0 wrong.
+
+- User: "yes make the upstream branch". `upstream/volatile-nop` at 7afa32a0a
+  with b3dab863c cherry-picked (no conflicts): c1042edd0. Same change as the
+  tree built above with `PLATS = all` (197 tests, no `@@FAIL`).
+
+#### upstream/volatile-nop — powerpc and mcg: accept the nop emitted after a volatile access
+
+- cemcom.ansi emits an EM `nop` after every volatile access
+  (`lang/cem/cemcom.ansi/eval.c`). The powerpc ncg table had no pattern for it,
+  so any C program that reads a volatile failed on linuxppc and osxppc with
+  "No table entry for 86". mcg (linuxmips) aborted with "treebuilder: unknown
+  simple instruction 'nop'". The other ncg tables all have `pat nop`.
+- `mach/powerpc/ncg/table`: `pat nop` with `kills ALL`, as in the other tables,
+  so no register copy of a volatile is reused after the access.
+- `mach/proto/mcg/treebuilder.c`: `op_nop` is ignored, like `op_lni`.
+- Test `tests/plat/core/volatile,e,.c` (core set): reads, writes and
+  read-modify-writes of volatile char, int, long and unsigned, a write through
+  a plain pointer followed by a read, and a read in a loop. No test in
+  tests/plat used volatile before.
+- Built with `PLATS = all`: no `@@FAIL`, 197 tests (the new one on cpm,
+  linux68k, linuxppc and pc86); the test also compiles for osxppc and
+  linuxmips, which have no test runner.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- User pushed and opened the PR: `upstream/volatile-nop` at c1042edd0 is
+  davidgiven/ack#382, "powerpc and mcg: accept the nop emitted after a volatile
+  access". Open upstream PRs from the fork now: #375-#382.
+
+### F1d follow-up: Modula-2 constant folding (investigation)
+
+- User: "start with the m2 folding". Path in the m2 front end: literal ->
+  `flt_str2flt` (LLlex.c) with its text kept in `r_real`; folded with
+  `flt_add/sub/mul/div` in `cstfbin` (cstoper.c), which drops the text; emitted
+  in code.c as `C_rom_fcon(text or flt_flt2str(18 digits), tp->tp_size)`, so the
+  back end's `float_cst` rounds it to the type of the place where it is used.
+- Semantics differ from C: a plain literal `0.1` has type REAL, `0.1D` LONGREAL,
+  and a REAL constant is assignment compatible with LONGREAL (`TstAssCompat`);
+  `MkCoercion` REAL->LONGREAL only changes the type. `x := 0.1` with x LONGREAL
+  gets the double 0.1, because the literal text is emitted at 8 bytes. So
+  literals must not be rounded to REAL as cemcom.ansi now rounds `0.1f`: m2
+  constants behave as untyped, exact values rounded once where used.
+- Probe (scratch `m2probe.py`, minix68k, -O): 300 random pairs per seed (1-3),
+  literals and folded + - * / as LONGREAL (D literals) and REAL, compared with
+  IEEE (operands rounded first, run-time result) and with the exact result
+  rounded once. Literals: 0 wrong. Folded vs IEEE: d+ 8-11%, d- 14-17%,
+  d* 20-23%, d/ 19-25%, f+ 7-10%, f- 14-16%, f* 36-41%, f/ 31-35%. Folded vs
+  exact: 0-4 per 300 per kind (d- 1, d* 6, d/ 8, d+ 1, f* 5, f/ 4 over the
+  three seeds), all 1 ulp; most of them have subnormal results or large
+  quotients. So m2 already folds "exact, rounded once"; the remaining errors
+  come from the 64-bit value going through 18 decimal digits and `float_cst`'s
+  half-up rounding instead of being rounded to the type directly.
+- Found on the way (minix68k, separate from folding): `InOut.WriteString/
+  WriteHex/WriteLn` print nothing, even with `CloseOutput`; `Terminal.Write(ch)`
+  writes 3 bytes per character (`c c \0`), `Terminal.WriteString` is right.
+  CARDINAL is 16 bits there.
+- User: "dont bother currently investigating modula2 it is not planned for
+  minix2, just make a note in the logs what we investigated and what could fix
+  it". Stopped here; no source changes. Notes for later:
+  - Possible fix for the 1-ulp errors: when code.c emits a folded constant
+    (`nd_RSTR` is NULL), round a copy of `nd_RVAL` with `flt_rnd()` to the size
+    of the place of use (4 bytes: 24 bits, emin -126; 8 bytes: 53 bits, emin
+    -1022) before `flt_flt2str`, so the back end gets a value that is already
+    rounded. Literals keep their text, so `x := 0.1` stays the double 0.1. Do
+    not round literals to REAL at lexing (m2 constants act as untyped). For
+    non-IEEE targets a `-Vm<n>` option as in cemcom.ansi (pdpv7 would set
+    `M2_ALIGN`, if it builds Modula-2). Test: a `.mod` in the floats set with the
+    probe's wrong cases checked against exact bit patterns. Upstream only after
+    PR #381 (needs `flt_rnd`).
+  - The probe's wrong cases (seeds 1-3) included `593.436D / 344.881D` (got
+    3ffb87fa7bbc0583, exact 3ffb87fa7bbc0584) and `2.50616704403109685E-22 *
+    4.52675054489872114E-24` (got 0, exact the smallest float subnormal).
+  - m2 output on minix68k: `InOut` prints nothing (also with `CloseOutput`),
+    `Terminal.Write(ch)` writes 3 bytes per character (`c c \0`). Not looked
+    into; would matter only if Modula-2 is used on the target.
+  - Scratch probe `m2probe.py` / `m2cmp.py` not kept in the repo.
+
+### ACK BASIC: compiler, deferred
+
+- User: "The BASIC in ACK is that a interpreter or a compiler ?" A compiler
+  (`doc/basic.doc`, "BASIC-EM compiler"): `em_bem` turns a `.b`/`.bas` file into
+  EM (`lib/descr/fe`, `.bas` -> `.k`), the usual optimizer, code generator,
+  assembler and linker make native code, linked with `libbasic`
+  (`lang/basic/lib`). No interactive environment: AUTO, CONT, EDIT, LIST, LOAD,
+  NEW, RENUM, RUN, SAVE and others are not recognized (appendix A); CALL, INKEY,
+  INPUT$, LEFT$, INSTR$, FIELD/GET/PUT/LSET/RSET not available yet; PEEK/POKE
+  ill-defined. Dialect after Microsoft BASIC. An interactive BASIC on the board
+  would be an interpreter (written in C and compiled with ACK, or bbcbasic).
+- User: "skip the BASIC in ACK for now, make notes and log them but currently
+  no specific actions on BASIC, anything else that benefits C and asm is ok to
+  investigate". B1 and the BASIC part of the C + BASIC build target marked
+  deferred in Tasks.md. Next work: C and assembler only.
+
+### T6: 68010 instruction check (investigation)
+
+- User: "start with T6". What can put non-68010 code in minix68k output:
+  - The m68k2 assembler (used only by minix68k) knows 68000/68010 plus the 68881
+    set: 68020 integer instructions and addressing modes (`extb`, `muls.l`,
+    bit fields, scaled index) are syntax errors, so they cannot get in.
+  - 68881 instructions (`f*`) are accepted: on a 68010 they are F-line traps.
+    `mach/m68k2/libem/build.py` already leaves `fp68881.s` out.
+  - Privileged instructions are accepted (move from/to SR, andi/ori/eori to SR,
+    move USP, movec, moves, reset, stop, rte); `move from SR` is privileged on
+    the 68010 but not on the 68000.
+  - The ncg table (m68020, `TBL68000`) has no SR/USP code; its FPU templates are
+    not compiled in for TBL68000.
+- Prototype (scratch `t6/m68kcheck.c`, host C): reads ACK objects and archives
+  with `modules/src/object`, disassembles each text section with Musashi's
+  `m68kdasm.c` (`plat/linux68k/emu/musashi`) as a 68010, reports F-line and
+  A-line words (Musashi counts F-line as valid: a legal trap), opcodes invalid
+  on a 68010, and privileged instructions. Linear decoding got out of step on
+  alignment padding (`0000` before a procedure's `link`, after `rts` or after a
+  `jsr` to a routine that does not return): zero words after a jump/return are
+  skipped, and decoding restarts at every text symbol (an instruction that runs
+  into a symbol means out of step).
+- Results: all 588 ACK objects of a full minix68k build (libc, libsys, libem,
+  libend, boot.o, c-ansi.o, the BASIC/Pascal/Modula-2 libraries, the 51 test
+  objects, dhrystone): no findings. Negative checks: `fmove.x`, `fadd.d`,
+  `move sr,d0`, `move d0,sr`, `and/or #,sr`, `move usp`, `reset`, `stop`, `rte`
+  are each reported; `fp68881.s` gives 90 findings; `move d0,ccr` (user mode
+  on the 68000 too) is not.
+- Found on the way: the m68k2 assembler starts in 68000 mode, and a 68010
+  instruction (`rtd`, `movec`, `move ccr,<ea>`) gives "68010 instruction
+  (warning)", which in ACK's assembler counts as an error (`warning()` in
+  `mach/proto/as/comm7.c` increments `nerrors`): assembly fails unless the file
+  starts with `.68010`. For a 68010-only target the default could be 68010.
+- User: "yes apply". `plat/minix68k/m68kcheck/m68kcheck.c` + `build.py`
+  (`cprogram` with Musashi's `m68kdasm.c`, `m68k.h`, the emulator's
+  `m68kconf.h` and `sim.h`, `modules/src/object`), installed as
+  `$(PLATDEP)/minix68k/m68kcheck`; option `-s` allows privileged instructions.
+  The emulator's `m68kconf.h` maps Musashi's reads to `cpu_read_byte/word/long`
+  and `cpu_read_word_dasm/long_dasm`, so the tool defines those.
+  Test `plat/minix68k/tests/m68kcheck.sh`, rule `m68kcheck_test` in `tests`.
+- The test's bad file (`move.l d0,d1; fmove.x fp0,fp1; move.w sr,d0; rts`)
+  first gave only 1 finding: a 68010 decodes an F-line word as one word, so
+  `fmove`'s extension word swallowed `move sr`. F-line words are now decoded as
+  a 68040 would (Musashi knows the FPU there), giving the real length and a
+  readable text (`fmove.s (A7), FP0`); `fp68881.s` now gives 122 findings.
+- Checked: all 588 ACK objects of the minix68k build clean with the installed
+  tool; built with ASan + UBSan (as the sanitizer CI job) it runs clean on all
+  of them and on `fp68881.s`. Tasks.md: T6 done; new A2 (assembler starts in
+  68000 mode), noted only.
+- `plat/minix68k/mkrelease.sh`: the README now describes
+  `lib/ack/minix68k/m68kcheck`. Release script run on a fresh build: the tarball
+  holds the tool, smoke test ok.
+- Fresh full `make` (minix68k): exit 0 in 1m41s, 101 tests (100 plus
+  `m68kcheck_test`), no `@@FAIL`.
+
+### T7: differential tests (investigation)
+
+- User: "start with T7". Scratch generator `t7/diffgen.py` (seeded): random C
+  functions over int8/16/32 and uint8/16/32 (`<stdint.h>`): arithmetic in
+  32-bit types with every result converted back to its type (so the size of
+  `int` does not matter), plus native 8/16-bit operations of one type (the
+  16-bit int code of minix68k), guarded `/` `%` (no division by 0, no
+  INT_MIN/-1), shifts with masked counts, comparisons, `!`, `?:`, `&&`/`||`,
+  casts; leaves are globals, parameters, locals and literals (so constant
+  folding too); loops, `switch`, arrays, a struct (copies, `->`), stores to
+  globals. Same source with gcc `-O1 -fwrapv` on the host and ACK for minix68k
+  at O0, -O, -O2, -O3, -O4 (emulator); outputs compared. Optional trace mode
+  prints every local.
+- First 200 seeds: 20 differed. Nine bugs found, each reduced to a small case
+  and fixed in the scratch tree (not in the repo yet):
+  1. **ncg m68020 table, `WORD_SIZE==2`, TESTS**: an `extend1` token (a byte
+     from `seq`/`sne` + `neg.b`, not yet extended) matched the `tst.w` rule
+     (`test_set2` includes `extend1`), so the stale upper byte decided the
+     test. `(uint16_t)(!(int32_t)(uint16_t)x) == 0` with x = 0x12300 is false.
+     Fix: `to test test_set2+extend2-extend1` (falls to `tst.b`). minix68k only.
+  2. **cemcom.ansi `ch3mon.c`**: unary `-` of an unsigned constant was not cut
+     to the type's size (`~` was), so `-(unsigned long)1371337135UL /
+     193754694UL` folded with the 64-bit value: 717414569 instead of 15.
+     Fix: mask both `-` and `~` for unsigned types. All targets.
+  3. **ncg m68020 table, COERCIONS `from memory1`** (`clr` + `move.b` into a
+     data register): `move.b` sets the condition codes for the byte, but ncg
+     takes them for the register, so `loc dvi` by a power of two used `bpl`
+     on the byte sign: `(uint8_t)l0 / 16` with l0 = -300 gave 14, not 13.
+     Fix: `killcc.` after the `move.b`. All m68k targets with this table.
+  4. **em_opt `peephole.c` `repl_mul`** (`-ml`: minix68k, linux68k): the
+     multiplier was read into a 64-bit `unsigned long`, so `ldc -1 mlu 4` had
+     64 one bits and became a shift by 64 (a no-op on the 68000): `x *
+     0xFFFFFFFFUL` was 0. Fix: mask `n` to `8*sz` bits. All targets using
+     `-ml` on a 64-bit host.
+  5. **ncg m68020 table `txxand`, `txxand_ouch`, `cmxtxxand`** (`tXX and`,
+     `cmX tXX and`): `x & (a op b)` was done as "clear bit 0 of x if false",
+     right only if x is 0 or 1 (Pascal booleans); in C `x & (y != 0)` with
+     x = -8017 gave -8017. Fix: `and #1,x` first, `clr x` if false. 12 sites.
+     All m68k targets.
+  6. **ncg m68020 table, `WORD_SIZE==2`, `cmu`/`cmi 4`**: `.cmu` leaves its
+     result in d1, but the pattern yielded nothing (the result was then taken
+     from the stack) and neither pattern had `kills ALL`. Only seen when ego's
+     CS keeps a `cmu 4` result in a local: a guarded division divided by 0 at
+     -O3. Fix: `kills ALL` and `yields d1`. minix68k only.
+  7. **em_opt patterns, constant folds without a range check**: `loc loc adu`,
+     `sbu`, `mlu`, `sli`, `slu` and `ldc loc sli/slu` produced constants that do
+     not fit the word (`loc 12933 loc 20802 mlu 2` -> `loc 269032266`; the
+     assembler then says "too big" on `divu.w #269032266`). Seen at -O3 (ego
+     propagates constants). Fix: `&& (sfit(r) || ufit(r))`. All targets.
+  8. **ncg m68020 table, `WORD_SIZE==2`, `loc loc ciu/cui/cuu` 2->4**: zero
+     extension clears a 4-byte register and moves the word into its low half,
+     but MOVES puts small constants into a D_REG with `move.l`/`moveq`, so the
+     upper half became the sign: `(uint32_t)(uint16_t)-1` was 0xFFFFFFFF.
+     Fix: a constant alternative `yields {const4, %1.num & 65535}`. minix68k.
+  9. **em_opt patterns `loc loc loc cii/ciu`**: `loc $1 loc $2 loc w cii` with
+     `$2<w` folded to `loc $1` without sign-extending the low `$2` bytes
+     (`(int8_t)16384` stayed 16384 after ego's UD propagated the constant);
+     the word->double-word folds had the same gap for `loc` operands in
+     unsigned form (`loc 45219`). Fix: `sfit($1,8*$2)` / `sfit($1,8*w)`.
+     All targets.
+- With all nine fixes: seeds 1-1000 all equal at all five levels (before the
+  last three: 4 left, all -O3/-O4). ego phases bisected for (9) with a scratch
+  `EGO_PHASES` hack in em_ego (not for the repo; em_ego's own `uphases`
+  are never filled).
+- Seeds 1-3000 with all nine scratch fixes: 2997 equal at all five levels;
+  3 still differ at every level (so not ego): 1747 and 2334 (one wrong value
+  each), 2676 (stops in the emulator). Not investigated yet: next session.
+  Scratch generator and runner: `t7/diffgen.py`, `t7/run.sh` (scratchpad);
+  the nine fixes exist only in the scratch tree `fork2`.
+- The 3 remaining seeds (1747, 2334, 2676) had one cause:
+  10. **ncg m68020 table, `WORD_SIZE==2`, `muls_w`/`mulu_w`**: declared as
+      `D_REG:rw:cc` (and `LOCAL:rw:cc`), so ncg took the condition codes as
+      valid for the 16-bit result, but `mulu.w`/`muls.w` set them from the
+      32-bit product. `unsigned g = 32768; (g * 0xe5b2) ? 1 : 0` gave 1:
+      `mulu.w 8(a6),d0; beq` tests 0x72d90000, the word is 0. In 2676 this
+      skipped a division guard, so `divu` trapped (EM trap 6, EIDIVZ).
+      Fix: `kills :cc` on the four muls_w/mulu_w lines. minix68k only
+      (linux68k has `WORD_SIZE==4` and uses `.l`).
+- With all ten scratch fixes: seeds 1-1000 and 3001-5000 (3000 programs)
+  all equal at all five levels, so 1-5000 is clean. The ten fixes are saved
+  as `t7/fixes1-10.patch` in the scratchpad (against `207d9c525`).
+- User: "yes apply" (steps 1 and 2: fixes into the repo, regression tests).
+  The ten scratch fixes applied as they were tested (`t7/fixes1-10.patch`;
+  the `EGO_PHASES` hack left out). One test per bug in `tests/plat/core`
+  (core set, so every platform runs them), `_m_a_i_n`/`ASSERT` style:
+  `tstword` (1), `negunsigned` (2), `bytediv` (3), `mulminus1` (4),
+  `andbool` (5), `cmulong,-O3` (6), `foldoverflow,-O3` (7), `zeroext,-O3`
+  (8), `foldcii,-O3` (9), `mulcc` (10). Written so the expected values hold
+  for 16- and 32-bit `int` (checked with gcc on the host through a small
+  `test.h` shim; `uint32_t` instead of `unsigned long`, which is 64-bit on
+  the host). Each test fails with the compiler of the current head (scratch
+  build of `b34795a89`) and passes with the fixes.
+- Bugs 8 and 9 hide behind each other: before fix 9, em_opt folded the
+  constant conversions that reach ncg's `loc loc cuu` after ego's constant
+  propagation, so the first cases (`m19`-`m21`) no longer failed. Found
+  again by reverting one fix at a time in a copy of the fixed tree and
+  rerunning the seeds that failed only at -O3 (636, 890), reduced with a
+  small scratch reducer (`rt/reduce.py`: stubs functions, then sets
+  assignments to 0, while ACK -O3 and gcc still differ).
+- Full build of the working tree in scratch with `PLATS = minix68k cpm
+  linux68k linuxppc pc86`: exit 0, no `@@FAIL`; the ten new tests ran and
+  passed on all five platforms (also the 16-bit-int i80/i86 back ends), as
+  did the minix68k suite (paranoia, fp, fold, cv, m68kcheck, BASIC).
+- User: "start with step 3" (permanent differential test). Measured: one
+  seed (generate, gcc, ACK at 5 levels, 5 emulator runs) takes about 0.6 s
+  of CPU. With the compiler before the fixes (`b34795a89`), 130 of seeds
+  1-1000 differ; 9 of 1-60. Seeds that differ only at -O2 or higher (the
+  ego bugs 6-9) are rare: 158, 617, 626, 636, 890. Proposal in the reply.
+- Proposal: compare with the host C compiler at test time instead of stored
+  expected output (every build has `$(HOSTCC)`; no output files to keep in
+  step, no dependence on Python's random module staying the same).
+- User: "yes apply". `plat/minix68k/tests/diffgen.py` (the scratch generator
+  with a new docstring; the unused random draw stays, commented, so the seeds
+  in this log give the same programs: checked for seeds 1, 636, 2676) and
+  `difftest.sh <ack> <diffgen.py> <emu> <hostcc> [seeds]` (seeds as numbers
+  or ranges; default 1-60 and 158 617 626 636 890; `-O1 -fwrapv
+  -fno-strict-aliasing` on the host; ACK at O0, -O, -O2, -O3, -O4; prints
+  `@@FAIL diff seed N -Ox: ...` and the first differences). Rule `diff_test`
+  in `plat/minix68k/tests/build.py`, passed `$(HOSTCC)`.
+- Checked: the 65 seeds pass with the current compiler (about 45 s, 31 s of
+  CPU) and fail on 14 seeds with the compiler before the fixes (the 9 of
+  1-60 at O0, the 5 extra at -O3). In the full build (scratch copy) the
+  test runs and passes. Also clean with the sanitizer CI job's host
+  compiler (gcc ASan+UBSan, no recovery) and with clang.
+- User: "start with step 4" (upstream branch with the generic fixes).
+  Upstream `default` is still `7afa32a0a`; PRs #381 and #382 open. The
+  generic part of `51b75a328` (fixes 2, 4, 7, 9: `ch3mon.c`, `peephole.c`,
+  `patterns`; fixes 3, 5: 4 of the 12 table hunks) applies to `7afa32a0a`
+  unchanged. Scratch tree of `7afa32a0a` + those fixes + the six tests,
+  `PLATS = all` (upstream's default): builds, all tests pass on cpm,
+  linux68k, linuxppc, pc86. (A first run stopped on "No space left": the
+  scratch trees had filled the root disk; removed the finished ones.)
+- Same tree without the fixes (`ninja -k 0`): negunsigned fails on all four
+  platforms, bytediv and mulminus1 on linux68k; andbool, foldoverflow and
+  foldcii passed, because they were written for 16-bit int. Added cases
+  with `int`/`long` operands: andbool then fails on linux68k, foldoverflow
+  and foldcii (-O3) on linux68k, linuxppc and pc86; all pass with the fixes
+  (full build again), and on minix68k (scratch build of the fork head with
+  the extended tests: all minix68k tests pass, diff_test included).
+- User: "yes make the upstream branch". `upstream/codegen-fixes` from
+  `7afa32a0a` (worktree in scratch, removed afterwards), three commits,
+  each with its tests and `tests/plat/build.py` entries:
+  `284586dfa` cemcom.ansi unary - (negunsigned), `e58cf9b35` em_opt
+  repl_mul and the fold checks (mulminus1, foldoverflow, foldcii),
+  `7eb551ec9` m68020 table move.b cc and tXX and (bytediv, andbool). The
+  tree is the one tested above (diff against it: only build output).
+- PR text (to davidgiven/ack, base `default`, head
+  `maarten-boot:upstream/codegen-fixes`):
+
+  Title: Code generation fixes found by differential testing
+
+  > I compiled random C programs (integer arithmetic of all widths,
+  > conversions, comparisons, guarded division, shifts, loops, switches,
+  > arrays, structs) with gcc and with the ACK at -O0 to -O4 and compared
+  > the output. These are the differences that are not specific to my
+  > target; each commit has a test in tests/plat/core that fails without
+  > it.
+  >
+  > - **cemcom.ansi**: unary `-` of an unsigned constant was not cut to the
+  >   type's size (`~` was), so `-(unsigned long)1371337135 / 193754694`
+  >   folded to 717414569 instead of 15. Fails on all four tested
+  >   platforms.
+  > - **em_opt**:
+  >   - `repl_mul` (`-ml`) kept the multiplier in a 64-bit `unsigned
+  >     long`: `x * 0xFFFFFFFFUL` became a shift by 64 and gave 0 on
+  >     linux68k.
+  >   - `loc loc adu/sbu/mlu/sli/slu` (and the `ldc` forms) folded to
+  >     constants that do not fit the word, and `loc loc loc cii/ciu`
+  >     folded without sign-extending the constant (`(int8_t)16384` stayed
+  >     16384). Both show at -O3, when ego propagates constants: the tests
+  >     fail on linux68k, linuxppc and pc86.
+  > - **m68020 ncg table** (linux68k):
+  >   - the `memory1` coercion (`clr`, `move.b`) kept the condition codes
+  >     of the byte as those of the register: `(uint8_t)l / 16` with
+  >     l = -300 gave 14.
+  >   - `x & (a op b)` was done as "clear bit 0 of x if false", only right
+  >     for x of 0 or 1: `(x >> s) & (a < b)` with x = -8017 gave -8017.
+  >
+  > Tested: `make` with `PLATS = all`, all tests pass on cpm, linux68k,
+  > linuxppc and pc86; without the fixes the new tests fail as described.
+  > Independent of #381 and #382.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- User: "yes apply". The extended andbool, foldoverflow and foldcii taken
+  from `upstream/codegen-fixes` into the fork, so both have the same tests
+  (checked on minix68k in the scratch build of the fork head above).

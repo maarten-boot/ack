@@ -17,13 +17,6 @@ DOUBLE	s1,s2;
 {
 	EXTEND	e1,e2;
 
-	if (s1.d[0] == 0 && s1.d[1] == 0) {
-		s1 = s2;
-		return;
-	}
-	if (s2.d[0] == 0 && s2.d[1] == 0) {
-		return;
-	}
 
 	extend(&s1.d[0],&e1,sizeof(DOUBLE));
 	extend(&s2.d[0],&e2,sizeof(DOUBLE));

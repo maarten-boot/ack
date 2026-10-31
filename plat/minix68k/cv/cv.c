@@ -153,7 +153,7 @@ int main(int argc, char* argv[])
 		fatal("Contains unresolved references.\n");
 	}
 	if (outhead.oh_nsect != LSECT && outhead.oh_nsect != NSECT)
-		fatal("Input file must have %d sections, not %ld\n", NSECT, outhead.oh_nsect);
+		fatal("Input file must have %d sections, not %d\n", NSECT, (int)outhead.oh_nsect);
 	rd_sect(outsect, outhead.oh_nsect);
 	/* A few checks */
 	if (outsect[BSSSG].os_flen != 0)
@@ -193,43 +193,32 @@ int main(int argc, char* argv[])
  */
 static void emits(struct outsect* section)
 {
-	char* p;
+	static char buf[0x4000];
 	long sz = section->os_flen;
 
 	rd_outsect(section - outsect);
 	while (sz)
 	{
 		unsigned int i = (sz >= 0x4000 ? 0x4000 : sz);
-		if (!(p = malloc(0x4000)))
-		{
-			fatal("No memory.\n");
-		}
-		rd_emit(p, (long)i);
-		if (write(output, p, (int)i) < i)
+		rd_emit(buf, (long)i);
+		if (write(output, buf, (int)i) < i)
 		{
 			fatal("write error.\n");
 		}
-		free(p);
 		sz -= i;
 	}
 
+	/* The rest of the section (not in the file) is zero. */
 	sz = section->os_size - section->os_flen;
-	if (sz)
+	memset(buf, 0, sizeof(buf));
+	while (sz)
 	{
-		if (!(p = calloc(0x4000, 1)))
+		unsigned int i = (sz >= 0x4000 ? 0x4000 : sz);
+		if (write(output, buf, (int)i) < i)
 		{
-			fatal("No memory.\n");
+			fatal("write error.\n");
 		}
-		while (sz)
-		{
-			unsigned int i = (sz >= 0x4000 ? 0x4000 : sz);
-			if (write(output, p, (int)i) < i)
-			{
-				fatal("write error.\n");
-			}
-			sz -= i;
-		}
-		free(p);
+		sz -= i;
 	}
 }
 
@@ -383,6 +372,8 @@ static long chmem(char* str, long old)
 		case '=':
 			new = num;
 			break;
+		default:
+			fatal("bad chmem argument %s\n", str);
 	}
 	return (new);
 }

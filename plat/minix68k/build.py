@@ -22,6 +22,7 @@ export(
         "$(PLATDEP)/minix68k/as$(EXT)": ".+as",
         "$(PLATDEP)/minix68k/ncg$(EXT)": ".+ncg",
         "$(PLATDEP)/minix68k/cv$(EXT)": "./cv",
+        "$(PLATDEP)/minix68k/m68kcheck$(EXT)": "./m68kcheck",
         "$(PLATIND)/descr/minix68k": "./descr",
     },
 )
