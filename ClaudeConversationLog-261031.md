@@ -186,3 +186,10 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   > PascalIO.mod); Linux passes.
   >
   > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- Pushed `rosco-minix68k` (`10126eb9a`) and `upstream/ci-actions`; the three
+  runs ran side by side (no cancel). rosco-minix68k: all jobs pass.
+  ci-actions: build-linux passes; build-windows (em_data spec.h, mnem.h,
+  pseu.h) and build-macos (libm2 PascalIO.mod) fail exactly as on the
+  other upstream branches, so the PR text's statement holds. No Node.js
+  deprecation annotation; macOS warns that brew's lua@5.4 is deprecated
+  (disabled 2027-08-26).
