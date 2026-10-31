@@ -296,3 +296,87 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   > tests pass.
   >
   > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+## F5 optional step: running programs linked the board's way (2.0.4 libc)
+
+- User: "continue with F5 optional step". Analysis only, in scratch; nothing
+  changed in `../minix-st-2.0.4` (read only, `rosco-m68k` at `c17cc1a`).
+- Of the two options under F5 (bring ACK's own minix68k headers/libsys to
+  2.0.4, or let the emulator run programs linked against the 2.0.4 C library)
+  the second is the one that tests what the board runs; the first would
+  duplicate a library the board does not use.
+- Scratch: HEAD built (minix68k, all tests pass); the minix project's
+  `src/rosco/ack/lib/Makefile` copied to scratch and run with this fork's
+  ACK (`ACC`, `AAL`, paths overridden): `crtso.o`, `emrts.o`, `libc.a` build
+  without errors. `lib/math` built as a `libm.a` the same way.
+- **The emulator needs no change for the basics.** 2.0.4's `__sendrec`
+  traps the same way (`trap #0`, d0 = 3, d1 = who, a0 = message), and
+  messages, call numbers and errno values are the same. A test program
+  (stdio, malloc, fopen "w"/"r", unlink, errno/strerror, float printf,
+  atof, strtol, exit 3) linked
+  `crtso.o emrts.o prog.o fphook.o libc.a libm.a libem.a libend.a`
+  gives the right output and status 3.
+- `tests/plat` `core`, `bugs`, `floats` (C files) linked that way (a
+  `main()` that calls `_m_a_i_n` for the `,e,` tests): 35 of 37 pass.
+  - `setjmp,c,`: 2.0.4's `setjmp` saves the signal mask with `SIGPROCMASK`
+    (74), which the emulator does not know (2.0.4-only call).
+  - `calloc,c,`: 2.0.4's `calloc` (`lib/ansi/calloc.c`) does not check
+    `nelem * elsize` for overflow: `calloc(32767, 3)` wraps to 32765 bytes
+    and succeeds. A 2.0.4 libc bug, for the minix project.
+- Other findings for the minix project (not this repo):
+  - **Float printf in ACK-built programs.** The ACK-built `libc.a` contains
+    `fphook/fltpr.o`, the stub that prints "cannot print floating point".
+    The real `_f_print` is `lib/fphook/fphook.c` (Minix's `libd.a`), pulled
+    in when the compiler references `_fp_hook`, which this ACK (upstream
+    too) never does. So `acc-minix` programs cannot print floats unless
+    `fphook.o` (and `frexp`, `ldexp`, `__huge_val` from `lib/math`) is
+    linked explicitly. Their gcc-built tools are fine (fixed in their
+    Follow-up 79).
+  - **`size_t` is 16 bits in 2.0.4** (`unsigned int`, `sys/types.h`),
+    32 bits in ACK's own headers. `ack` adds its own include directory
+    after `-I`, so a header 2.0.4 lacks (e.g. `<stdint.h>`) silently comes
+    from ACK and redeclares `size_t` (seen with `tests/plat/lib/test.h`).
+    Mixing the two header sets gives wrong calls (`memcpy`, `malloc`, ...
+    take 2 bytes, not 4).
+- Proposal (waiting for the user's choice):
+  1. Emulator (`plat/minix68k/emu/sim.c`): add the 2.0.4-only calls the
+     library uses, as no-ops where no signals are delivered: `SIGACTION`
+     (71, writes `oact` = SIG_DFL), `SIGPROCMASK` (74, keeps the mask,
+     returns it in `m2_l1`); others only when a test needs them.
+  2. A test target that builds the 2.0.4 libc from a minix-st-2.0.4 tree
+     with this ACK and runs `tests/plat` (+ a small libc test) linked the
+     board's way. The sources are in another repository
+     (`maarten-boot/minix-st-2.0.4`, public): locally from
+     `MINIX204=../minix-st-2.0.4` (skipped when absent), and in CI a
+     checkout of that repository at a pinned commit.
+  3. Not do: port ACK's own minix68k headers/libsys to 2.0.4.
+- User: "yes apply 1 and 2, with CI pinned".
+  - Emulator (`plat/minix68k/emu/sim.c`): `SIGACTION` (71; per-signal
+    `struct sigaction` kept and handed back, as MM), `SIGPROCMASK` (74; how
+    in `m2_i1`, set and old mask in `m2_l1`, SIGKILL never blocked) and,
+    found when running the tests, `SIGRETURN` (75): 2.0.4's `longjmp` goes
+    through `_sigjmp` → `sigreturn(&sigcontext)`. Only the `SC_NOREGLOCALS`
+    form (ACK's jmp_buf) is emulated, as the kernel does it: d0, a6, sp
+    and pc; pc goes into the 68010 exception frame because the trap
+    returns with `rte`, and d0 is not reset to 0 after the reply. A full
+    register set (return from a signal handler) stops the run: no signal
+    is ever delivered.
+  - `plat/minix68k/tests/minix204.sh` and `make minix204-test`
+    (`MINIX204=<tree>`, default `../minix-st-2.0.4`, skipped when absent):
+    builds the library with the tree's own Makefile in a mirror of the
+    tree's layout under `.obj/minix204` (symlinks; nothing written into the
+    tree), plus `fphook.o` and `lib/math` as `libm.a`; runs `tests/plat`
+    core/bugs/floats C tests (`minix204/emain.c` calls `_m_a_i_n` for the
+    `,e,` tests; `minix204/stdint.h` so that ACK's, with a 32-bit
+    `size_t`, is not used) and `minix204/libc.c`, whose output must equal
+    `libc.out` (the same program's output with host gcc/glibc; identical).
+    `core/calloc` is an expected failure (XPASS fails, so a fixed calloc
+    is noticed when the pin moves).
+  - CI: `build-linux` fetches `maarten-boot/minix-st-2.0.4` at
+    `c17cc1a101cc015db99a44f94712c0379a809d2b` into `$RUNNER_TEMP` after
+    `make`, then `make minix204-test`.
+  - Scratch: full `make` plus `minix204-test` with the local tree and with
+    a clean fetch of the pinned commit from GitHub: 37 passed, 1 XFAIL,
+    rc 0; without a tree: skipped, rc 0. Before `SIGRETURN`: `setjmp` and
+    `libc` failed ("unsupported system call 75"). Files identical to the
+    tested scratch tree. Not committed.
