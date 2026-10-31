@@ -265,3 +265,34 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   (skipped, with the fix/design). N11 waits for "yes apply".
 - User: "yes apply". N11 fix and test applied (files identical to the
   tested scratch tree); `Tasks.md` N11 fixed. Not committed.
+- User: "continue with N11 upstream". The fix changes code PR #380 added
+  (line_dir, the `__FILE__` buffer), so `upstream/cpp-escape` is made on
+  top of `upstream/cpp-longpath` (`509093957`, #380), not from
+  `7afa32a0a`: commit `cb29db892`; the three files were otherwise the same
+  as in the fork. Pushed by the user. Scratch check of the branch with
+  PLATS = all: rc 0, 194 tests, none fail (cpp.ansi test included).
+- PR text, `maarten-boot:upstream/cpp-escape` → davidgiven/ack `default`:
+
+  Title: cpp.ansi: escape file names in line directives and __FILE__
+
+  > Builds on #380 (its commit is included here; once #380 is merged only
+  > the second commit remains).
+  >
+  > The name in `#line N "name"`, and in the `# N "name"` lines the
+  > compilers read, is a string literal: both cpp.ansi and cemcom.ansi read
+  > it with its escapes processed. But cpp.ansi wrote file names back
+  > between quotes as they are, so a `"` or `\` in a file name gave a
+  > broken string (cpp.ansi could not even read its own output back), and
+  > a name that came through `#line` lost its escapes.
+  >
+  > `quoted_name()` writes the name as a string literal (`"` and `\`
+  > escaped, other control characters in octal); the line directives and
+  > `__FILE__` use it. With it, an error in `q"b\c/t.c` is reported for
+  > that file.
+  >
+  > Tested: `longpath.sh` gets a directory named `q"b\c` (line directives,
+  > `__FILE__`, and the output preprocessed again) and `#line` with
+  > escapes; it fails without the change. `make` with `PLATS = all`: all
+  > tests pass.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
