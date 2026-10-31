@@ -71,6 +71,18 @@ all: +all
 ack-setup.exe: etc/windows-installer.nsi all
 	makensis -dBUILDDIR="$$(realpath $(INSDIR))" -dOUTFILE="$$(realpath $@)" $<
 
+# minix68k programs linked with the Minix 2.0.4 C library, as on the
+# rosco_m68k board, run in the emulator (plat/minix68k/tests/minix204.sh).
+# MINIX204 is a minix-st-2.0.4 tree (default ../minix-st-2.0.4; skipped
+# when there is none).
+
+MINIX204 ?=
+
+.PHONY: minix204-test
+minix204-test: all
+	sh plat/minix68k/tests/minix204.sh $(INSDIR) \
+		$(OBJ)/plat/minix68k/emu/+emu/emu "$(MINIX204)" $(OBJ)/minix204
+
 install: all
 	@mkdir -p $(PREFIX)
 	tar cf - -C $(INSDIR) . | tar xvf - -C $(PREFIX)

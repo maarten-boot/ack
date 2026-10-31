@@ -1,0 +1,21 @@
+int -12345 54321 beef 777 -2000000000 4000000000
+str [   ab] [ab   ] [ab] z
+flt 2.500000 1.000000e+10 0.125 0.333333
+flt -0.125 0.3333333333 1.23457e+08
+strtod 1500 rest [] atof -0.25
+0.1 = 0.10000000000000001 back 1
+sscanf 3: 42 3.75 word
+realloc keeps [heap]
+calloc zeroed 1
+read [first 1] size 20
+unlink 0
+open -1 errno 2 No such file or directory
+signal first 1
+signal again 1
+signal ign 1
+mask INT 1 KILL 0
+longjmp 50 depth 5
+qsort -32768 -3 0 5 9 32767
+strtol -63 2147483647
+argc 1 argv0 path
+@@FINISHED

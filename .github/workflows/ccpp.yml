@@ -15,6 +15,21 @@ jobs:
       run: sudo apt update && sudo apt install bison flex lua5.3
     - name: make
       run: make
+    # minix68k programs linked with the Minix 2.0.4 C library, as on the
+    # rosco_m68k board (plat/minix68k/tests/minix204.sh). The library comes
+    # from the minix-st-2.0.4 repository at a pinned commit; move the pin
+    # deliberately.
+    - name: fetch minix-st-2.0.4
+      env:
+        MINIX204_REPO: https://github.com/maarten-boot/minix-st-2.0.4.git
+        MINIX204_SHA: c17cc1a101cc015db99a44f94712c0379a809d2b
+      run: |
+        git init -q "$RUNNER_TEMP/minix-st-2.0.4"
+        cd "$RUNNER_TEMP/minix-st-2.0.4"
+        git fetch -q --depth 1 "$MINIX204_REPO" "$MINIX204_SHA"
+        git checkout -q FETCH_HEAD
+    - name: make minix204-test
+      run: make minix204-test "MINIX204=$RUNNER_TEMP/minix-st-2.0.4"
 
   # The host tools built with AddressSanitizer and UndefinedBehaviorSanitizer,
   # and all tests run with them: any finding fails the build. Leaks are not

@@ -215,9 +215,22 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
     `struct stat`. MM accepts `cv`'s header (ST layout, `a_cpu` 0x04 allowed on a
     68000) and its GEMDOS relocation table: **nothing to change in `cv`**.
   - ACK's own minix68k headers/libsys stay Minix 1.x (V7 style; POSIX calls declared
-    but not implemented). They are only used by ACK's tests and examples. Optional:
-    bring them to 2.0.4 later, or let the emulator also run programs linked against
-    the 2.0.4 C library (as `acc-minix` links), adding the 2.0.4-only calls they use.
+    but not implemented). They are only used by ACK's tests and examples; porting
+    them to 2.0.4 is not planned (the board does not use them).
+  - [x] Optional step done 2026-10-31: the board's combination is tested.
+    `make minix204-test [MINIX204=<minix-st-2.0.4 tree>]`
+    (`plat/minix68k/tests/minix204.sh`) builds the 2.0.4 C library with this ACK
+    (the tree's own `src/rosco/ack/lib/Makefile`, nothing written into the tree),
+    links `crtso.o emrts.o <prog> fphook.o libc.a libm.a libem.a libend.a` and runs
+    `tests/plat` core/bugs/floats (C) and `minix204/libc.c` (output compared with
+    `libc.out`) in the emulator: 37 pass, `core/calloc` expected to fail (2.0.4's
+    `calloc` has no overflow check). The emulator gained 2.0.4's `SIGACTION`,
+    `SIGPROCMASK` and `SIGRETURN` (longjmp's form). Skipped without a tree; CI
+    (`build-linux`) fetches `maarten-boot/minix-st-2.0.4` at a pinned commit.
+    Found for the minix project: ACK-built programs print no floats without
+    `fphook.o` (`libc.a` has only the stub; this ACK never references `_fp_hook`);
+    2.0.4's `size_t` is 16 bits, ACK's headers' 32 (a header 2.0.4 lacks, e.g.
+    `<stdint.h>`, comes from ACK); `calloc` overflow.
 - [x] **P1 — take over the minix project's `-mshort` assembler fix** (done 2026-10-29).
   `mach/m68k2/as/mach1.c` (`eamode[]`) and `mach5.c` (`flag` in `ea_1()`) must be
   `long`: `(RELO2|RELPC)<<8` does not fit a 16-bit `int` when the assembler is built
