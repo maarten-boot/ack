@@ -1245,3 +1245,25 @@ User:
 - With all ten scratch fixes: seeds 1-1000 and 3001-5000 (3000 programs)
   all equal at all five levels, so 1-5000 is clean. The ten fixes are saved
   as `t7/fixes1-10.patch` in the scratchpad (against `207d9c525`).
+- User: "yes apply" (steps 1 and 2: fixes into the repo, regression tests).
+  The ten scratch fixes applied as they were tested (`t7/fixes1-10.patch`;
+  the `EGO_PHASES` hack left out). One test per bug in `tests/plat/core`
+  (core set, so every platform runs them), `_m_a_i_n`/`ASSERT` style:
+  `tstword` (1), `negunsigned` (2), `bytediv` (3), `mulminus1` (4),
+  `andbool` (5), `cmulong,-O3` (6), `foldoverflow,-O3` (7), `zeroext,-O3`
+  (8), `foldcii,-O3` (9), `mulcc` (10). Written so the expected values hold
+  for 16- and 32-bit `int` (checked with gcc on the host through a small
+  `test.h` shim; `uint32_t` instead of `unsigned long`, which is 64-bit on
+  the host). Each test fails with the compiler of the current head (scratch
+  build of `b34795a89`) and passes with the fixes.
+- Bugs 8 and 9 hide behind each other: before fix 9, em_opt folded the
+  constant conversions that reach ncg's `loc loc cuu` after ego's constant
+  propagation, so the first cases (`m19`-`m21`) no longer failed. Found
+  again by reverting one fix at a time in a copy of the fixed tree and
+  rerunning the seeds that failed only at -O3 (636, 890), reduced with a
+  small scratch reducer (`rt/reduce.py`: stubs functions, then sets
+  assignments to 0, while ACK -O3 and gcc still differ).
+- Full build of the working tree in scratch with `PLATS = minix68k cpm
+  linux68k linuxppc pc86`: exit 0, no `@@FAIL`; the ten new tests ran and
+  passed on all five platforms (also the 16-bit-int i80/i86 back ends), as
+  did the minix68k suite (paranoia, fp, fold, cv, m68kcheck, BASIC).

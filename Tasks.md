@@ -382,6 +382,12 @@ In order of value:
   `paranoia.c`, small integer/long/struct tests) with the host gcc and with ACK for
   minix68k, run both (natively and in the emulator), compare outputs. Mind 16-bit
   `int`: use `long` where values exceed 32767.
+  - Progress 2026-10-31: random-program generator (scratch) found ten code
+    generation bugs (log, T7); all fixed in the repo with one regression test
+    each in `tests/plat/core`; seeds 1-5000 equal at O0..-O4. Still to do: a
+    permanent differential test in `plat/minix68k/tests` (fixed seeds,
+    stored expected output), and the upstream branch with the generic fixes
+    (2, 3, 4, 5, 7, 9).
 - [x] **T8 — sanitizer CI job** (done 2026-10-30): `build-linux-sanitizers` in
   `.github/workflows/ccpp.yml` builds all host tools with gcc ASan + UBSan (strict:
   any finding aborts; no leak or alignment checks, see A1) and runs all tests (about
