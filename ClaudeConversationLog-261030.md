@@ -1233,3 +1233,12 @@ User:
   each), 2676 (stops in the emulator). Not investigated yet: next session.
   Scratch generator and runner: `t7/diffgen.py`, `t7/run.sh` (scratchpad);
   the nine fixes exist only in the scratch tree `fork2`.
+- The 3 remaining seeds (1747, 2334, 2676) had one cause:
+  10. **ncg m68020 table, `WORD_SIZE==2`, `muls_w`/`mulu_w`**: declared as
+      `D_REG:rw:cc` (and `LOCAL:rw:cc`), so ncg took the condition codes as
+      valid for the 16-bit result, but `mulu.w`/`muls.w` set them from the
+      32-bit product. `unsigned g = 32768; (g * 0xe5b2) ? 1 : 0` gave 1:
+      `mulu.w 8(a6),d0; beq` tests 0x72d90000, the word is 0. In 2676 this
+      skipped a division guard, so `divu` trapped (EM trap 6, EIDIVZ).
+      Fix: `kills :cc` on the four muls_w/mulu_w lines. minix68k only
+      (linux68k has `WORD_SIZE==4` and uses `.l`).
