@@ -2,8 +2,10 @@
 
 Open issues found in this repository, most important first. `F<n>` refers to the
 findings in `ClaudeConversationLog-261023.md` / `-261024.md`; `N<n>` are new in the
-code check of 2026-10-29 (`ClaudeConversationLog-261029.md`). Nothing here has been
-fixed yet. Scope: Linux host, C + BASIC for minix68k.
+code check of 2026-10-29 (`ClaudeConversationLog-261029.md`). Ticked items are done
+(dated, with the details in that day's log); open ones are marked skipped or deferred
+where that was decided. Scope: Linux host, C and assembler for minix68k (BASIC
+deferred since 2026-10-30; Modula-2 and Pascal not planned).
 
 ## High
 
@@ -288,7 +290,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   branch (reached since F4 added `-D__minix`) used 16-bit `unsigned` in `temper()`
   (`x>>18` undefined, 15-bit names). Now `unsigned long` under `WIN32 || __minix`,
   helper renamed `next_random()`, names printed with `%lx`.
-- [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob remains): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
+- [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob removed 2026-10-31): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
   16 KB buffer per chunk; `chmem()` (`:333`) can return an uninitialised `new`.
   `plat/minix68k/libsys/build.py:11-13` globs `plat/minix/libsys`, which does not exist.
 - [x] **F9 — build system** (done 2026-10-30). `.drone.yml` and `.travis.yml` (Ubuntu
@@ -359,8 +361,9 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   as F4: `lib*.a` and `-lm` → `libc.a` in each `descr`.
 - [x] **N8 — BASIC compiles are not reproducible** (fixed 2026-10-30).
   `lang/basic/src/gencode.c` emitted the length of the DATA file name as
-  `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Now
-  `strlen()`. All 49 BASIC test programs compile reproducibly.
+  `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Fixed
+  with `strlen()`; since B2 (`8a2103d9b`) the DATA file name is not emitted at all.
+  All 49 BASIC test programs compile reproducibly.
 - [ ] **N6 — merge commit with a placeholder identity.** `c50619962` ("sync from
   upstream", 2026-10-29) is authored by `Your Name <you@example.com>`: set
   `user.name`/`user.email` on the machine that made it. History is pushed, so leave
@@ -371,10 +374,13 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 ACK has a test suite: `tests/plat` (about 60 small self-checking programs in sets
 `core`, `bugs`, `floats`, `long-long`, `m2`, using `tests/plat/lib/test.c`, which only
 needs `write()` and `_exit()`), run by `tests/plat/testdriver.sh` on a per-platform
-emulator (`plat/linux68k/emu`: Musashi plus ~400 lines of syscall shim). minix68k has
-no emulator and is not in `TEST_PLATS` (`build.py`), so **nothing is tested for it
-today** beyond "it compiles". `lang/basic/test` has 49 BASIC programs and 47 expected
-outputs (`*.b.g`), not wired into the build.
+emulator (`plat/linux68k/emu`: Musashi plus ~400 lines of syscall shim). When this
+list was written (2026-10-29) minix68k had no emulator and was not in `TEST_PLATS`, so
+nothing was tested for it beyond "it compiles", and the BASIC tests (`lang/basic/test`)
+were not in the build. Now (T1-T10) `make` runs `tests/plat` core/bugs/floats on
+`plat/minix68k/emu` and the minix68k tests in `plat/minix68k/tests` (BASIC, `cv`,
+68010 check, soft-float, folding, differential, Paranoia), and `make minix204-test`
+the board's combination with the Minix 2.0.4 C library (F5).
 
 In order of value:
 
