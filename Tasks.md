@@ -303,6 +303,12 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   any length. Line directives are now echoed (prefix and number formatted into 32
   bytes), `__FILE__` gets `realloc`ed. Test: `lang/cem/cpp.ansi/longpath.sh`
   (a 600+ character path and a 2000-character `#line` name).
+- [ ] **A3 — misaligned structs in `util/ass`** (found 2026-10-31, upstream build
+  with all platforms; not used by minix68k). `-fsanitize=alignment`: 948 reports
+  in em22's assembler (`ass00.c`, `ass30.c`-`ass80.c`, `assci.c`, `asscm.c`,
+  `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
+  (mod 8) addresses, from its own allocator in `asscm.c`. Same kind as A1.
+  Upstream only, unless em22 is ever built here.
 - [ ] **A2 — the minix68k assembler starts in 68000 mode.** A 68010 instruction
   (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gives "68010 instruction (warning)",
   and the assembler counts warnings as errors (`warning()` in

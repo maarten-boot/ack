@@ -73,3 +73,116 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   - User: "yes apply". `util/led` fix applied (files identical to the tested
     scratch tree), `ccpp.yml`: `-fno-sanitize=alignment` dropped and the
     comment updated; `Tasks.md`: A1 fixed, T8 note updated. Not committed.
+- User: "yes make the upstream branch". From `7afa32a0a` (the led files are
+  the same there; salloc.c differs only by the S3 fix), one commit each:
+  `upstream/led-align` `ab20fbf49` (A1), `upstream/ncg-gc-cc` `1e3151950`
+  (S3). Pushed by the user, as was `rosco-minix68k` (`f088c1498`; CI green,
+  the sanitizer job now with the alignment check).
+- The `upstream/led-align` push run was cancelled by GitHub, not by hand:
+  upstream's `ccpp.yml` has `concurrency: group:
+  environment-${{ github.head_ref }}`, `cancel-in-progress: true`;
+  `head_ref` is empty on push, so all push runs share one group and the
+  `upstream/ncg-gc-cc` run, started in the same second, cancelled it
+  (annotation "Canceling since a higher priority waiting request for
+  environment- exists"). Re-run after the other run has finished
+  (`gh run rerun 41223452353`). Earlier: `upstream/codegen-fixes` push run
+  failed in build-macos and build-windows only (not looked at; Linux only).
+- Upstream check (scratch, `7afa32a0a`, PLATS = all, 193 tests):
+  plain build passes; with both fixes passes, and every output file is
+  identical except led itself and the `hilo_bas_*` examples, which differ
+  because upstream's BASIC compiles are not reproducible (N8, fixed in the
+  fork in `4c4cafd9a`; two compiles of hilo.bas in the same tree differ). With `-fsanitize=alignment`: no reports in led or
+  rd.c; 948 remain, all in `util/ass` (em22's assembler: struct line_t,
+  relc_t, freeblock, locl_t, stat_t at 4 (mod 8) addresses; its own
+  allocator in asscm.c). Not used by minix68k: new task A3 (low).
+- PR text, `maarten-boot:upstream/led-align` → davidgiven/ack `default`:
+
+  Title: led: keep the structs in a module aligned for the host
+
+  > led keeps each input module in one memory piece: header, section
+  > table, name table, strings, then the offsets of the section contents.
+  > With USEMALLOC each piece is its own malloc block, but the offsets
+  > inside it were only 4-aligned (the archive magic took `sizeof(int)`,
+  > `int_align()` rounded to `sizeof(int)`, the name table followed the
+  > 20-byte header and section entries). On a 64-bit host `struct outname`,
+  > `struct ar_hdr` and `ind_t` need 8, so linking with an archive used
+  > them at misaligned addresses: undefined behaviour, reported by
+  > `-fsanitize=alignment` on every such link, and a fault on a
+  > strict-alignment host.
+  >
+  > `int_align()` now rounds to `_Alignof(max_align_t)`, each table starts
+  > aligned, and `modulsize()` is computed from that layout.
+  >
+  > Tested: `make` with `PLATS = all`, all tests pass; every linked program
+  > is byte-identical to before (the `hilo_bas` examples differ between any
+  > two builds because the BASIC compiler emits a heap address, a separate
+  > bug). With `-fsanitize=alignment` led has no reports left (the
+  > remaining ones are in `util/ass`).
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+- PR text, `maarten-boot:upstream/ncg-gc-cc` → davidgiven/ack `default`:
+
+  Title: ncg: don't free strings still held in the condition-code register
+
+  > `garbage_collect()` in `mach/proto/ncg/salloc.c` frees the strings no
+  > longer referenced from the EM lines, the fake stack or the registers,
+  > but it scans the registers from `machregs+1`. `machregs[0]` holds the
+  > token of the last instruction that set the condition codes
+  > (`setcc()`), so a string only referenced there was freed, and `test()`
+  > then compared with it in `eqtoken()`. AddressSanitizer reports a
+  > heap-use-after-free; without it a test can be wrongly skipped if the
+  > memory has been reused. It affects every ncg back end whose table has
+  > instructions that set cc (m68020, i86, i386, i80, pdp, powerpc, arm).
+  > I hit it compiling random C programs for 68000 with ncg built with
+  > `-fsanitize=address`.
+  >
+  > The fix also scans `machregs[0]`, unless it holds a register.
+  >
+  > Tested: `make` with `PLATS = all`, all tests pass, output unchanged.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- `upstream/ncg-gc-cc` push run: build-linux passes, build-macos and
+  build-windows fail. Upstream `default` (`7afa32a0a`, merge of #372) fails
+  the same two jobs in davidgiven/ack's own CI, so these failures are
+  older than our branches. `upstream/led-align` run can now be re-run.
+- User: "that went wrong one canceled one failed". The failure is the same
+  on all six upstream branches (codegen-fixes, float-fold, volatile-nop,
+  libc-fixes, cpp-longpath, ncg-gc-cc), whatever they change:
+  build-windows stops generating `em_data`'s `spec.h`/`mnem.h`/`pseu.h`,
+  build-macos stops compiling m2 `PascalIO.mod` (libm2, linux386/68k);
+  build-linux passes on all. Upstream `default`'s own runs fail the same
+  two jobs (its logs have expired, HTTP 410). So: the base, not the
+  fixes. Not looked into further (Linux only).
+- User: ".github/workflows/ccpp.yml is still using outdated gh actions and
+  not pinned to hash, please update". The fork's workflows were already
+  pinned; the outdated ones are upstream's, which the upstream branches
+  carry. New branch `upstream/ci-actions` from `7afa32a0a` (separate PR,
+  so the fix PRs stay small): checkout v7.0.1, setup-msys2 v2.33.0,
+  upload-artifact v7.0.2, action-gh-release v3.0.3, each pinned to its
+  commit (checked: API returns a commit; action.yml at that commit says
+  node24). mknejp/delete-release-assets has only `v1` (a branch, node20):
+  dropped, action-gh-release overwrites same-name assets
+  (`overwrite_files`, default true, now explicit). ccpp.yml concurrency
+  group fixed (`${{ github.workflow }}-${{ github.head_ref || github.ref }}`),
+  the cause of the cancelled led-align run. YAML parses.
+- PR text, `maarten-boot:upstream/ci-actions` → davidgiven/ack `default`:
+
+  Title: CI: update the actions, pin them, and stop pushes cancelling each other
+
+  > - All actions on their latest release, pinned to the commit SHA:
+  >   checkout v7.0.1, setup-msys2 v2.33.0, upload-artifact v7.0.2,
+  >   action-gh-release v3.0.3 (all node24; checkout v3 and
+  >   action-gh-release v1 were node16).
+  > - release.yml: `mknejp/delete-release-assets` has no release newer than
+  >   v1 (node20); `action-gh-release` already overwrites an asset with the
+  >   same name, so the step is dropped and `overwrite_files: true` is set.
+  > - ccpp.yml: the concurrency group used `github.head_ref`, which is empty
+  >   for push events, so pushes to two branches cancelled each other. It is
+  >   now per workflow and branch.
+  >
+  > The macOS and Windows jobs fail on `default` before and after this
+  > change (Windows in em_data's header generation, macOS in libm2's
+  > PascalIO.mod); Linux passes.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
