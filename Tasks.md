@@ -46,6 +46,10 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   same double (5,000 of 5,000). Beyond 17 digits ACK prints zeros or approximate
   digits; an exact decimal tie is rounded up (glibc: to even). Fix would need
   big-number arithmetic (as in `dtoa`).
+  *Skipped (2026-10-31, user's decision).* Design for later
+  (`ClaudeConversationLog-261031.md`): exact digits from m * 2^e as a big
+  integer (m << e, or m * 5^-e), 16-bit limbs, round half to even; about 1 KB of
+  code per program printing floats, slow on a 68010 only for extreme values.
 - [x] **F1d — the compiler folds float constants 1 ulp off** (fixed 2026-10-30; found 2026-10-30, all
   platforms). `0.1 + 0.2` folded at compile time is `3fd3333333333333`; IEEE (gcc,
   and ACK's own run-time soft-float) gives `3fd3333333333334`. So a constant
@@ -317,9 +321,13 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   every pass; `.68000` still switches back. Test: `m68kcheck_test` assembles
   `move ccr,d0; rtd #4` without a directive and must fail with `.68000`. Found
   with T6.
-- [ ] **N11 — file names are not escaped in line directives and `__FILE__`.**
-  `cpp.ansi` writes the name between quotes as it is, so a `"` or `\` in a file
-  name gives a broken string. Old; rare on Linux.
+- [x] **N11 — file names were not escaped in line directives and `__FILE__`**
+  (fixed 2026-10-31). `cpp.ansi` wrote the name between quotes as it is, so a `"`
+  or `\` in a file name gave a broken string, and a name from `#line` (read with its
+  escapes processed) lost them. Now `quoted_name()` (`replace.c`) writes it as a
+  string literal (`"`, `\` escaped, control characters in octal) for both. Test:
+  `lang/cem/cpp.ansi/longpath.sh` (a directory `q"b\c`, the output read back, and
+  `#line` with escapes).
 - [x] **N12 — powerpc ncg and mcg cannot compile a volatile access.** (fixed
   2026-10-30) cemcom.ansi emits `nop` after a volatile access (`eval.c`);
   `mach/powerpc/ncg/table` had no `pat nop` ("No table entry for 86" on linuxppc
@@ -331,6 +339,8 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
   if those platforms matter (upstream).
+  *Skipped (2026-10-31, user's decision): other platforms only, upstream.* Fix
+  as F4: `lib*.a` and `-lm` → `libc.a` in each `descr`.
 - [x] **N8 — BASIC compiles are not reproducible** (fixed 2026-10-30).
   `lang/basic/src/gencode.c` emitted the length of the DATA file name as
   `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Now
