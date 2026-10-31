@@ -1267,3 +1267,24 @@ User:
   linux68k linuxppc pc86`: exit 0, no `@@FAIL`; the ten new tests ran and
   passed on all five platforms (also the 16-bit-int i80/i86 back ends), as
   did the minix68k suite (paranoia, fp, fold, cv, m68kcheck, BASIC).
+- User: "start with step 3" (permanent differential test). Measured: one
+  seed (generate, gcc, ACK at 5 levels, 5 emulator runs) takes about 0.6 s
+  of CPU. With the compiler before the fixes (`b34795a89`), 130 of seeds
+  1-1000 differ; 9 of 1-60. Seeds that differ only at -O2 or higher (the
+  ego bugs 6-9) are rare: 158, 617, 626, 636, 890. Proposal in the reply.
+- Proposal: compare with the host C compiler at test time instead of stored
+  expected output (every build has `$(HOSTCC)`; no output files to keep in
+  step, no dependence on Python's random module staying the same).
+- User: "yes apply". `plat/minix68k/tests/diffgen.py` (the scratch generator
+  with a new docstring; the unused random draw stays, commented, so the seeds
+  in this log give the same programs: checked for seeds 1, 636, 2676) and
+  `difftest.sh <ack> <diffgen.py> <emu> <hostcc> [seeds]` (seeds as numbers
+  or ranges; default 1-60 and 158 617 626 636 890; `-O1 -fwrapv
+  -fno-strict-aliasing` on the host; ACK at O0, -O, -O2, -O3, -O4; prints
+  `@@FAIL diff seed N -Ox: ...` and the first differences). Rule `diff_test`
+  in `plat/minix68k/tests/build.py`, passed `$(HOSTCC)`.
+- Checked: the 65 seeds pass with the current compiler (about 45 s, 31 s of
+  CPU) and fail on 14 seeds with the compiler before the fixes (the 9 of
+  1-60 at O0, the 5 extra at -O3). In the full build (scratch copy) the
+  test runs and passes. Also clean with the sanitizer CI job's host
+  compiler (gcc ASan+UBSan, no recovery) and with clang.
