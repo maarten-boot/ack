@@ -193,3 +193,21 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   other upstream branches, so the PR text's statement holds. No Node.js
   deprecation annotation; macOS warns that brew's lua@5.4 is deprecated
   (disabled 2027-08-26).
+- User: "continue". A2 (analysis, scratch only):
+  - Cause: `model` (mach1.c, `extern`) is defined by `comm3.c`, which
+    includes the machine declarations with `extern` defined empty, so it
+    starts at 0 = 68000; only `.68010` sets 1. `test68010()` then gives
+    "68010 instruction (warning)", and `warning()` counts as an error and
+    stops. Reproduced: `rtd`, `move ccr`, `movec`, `moves` fail without
+    `.68010`. The m68k2 assembler is built only for minix68k.
+  - Fix: `mach/m68k2/as/mach0.c` redefines the per-pass hook
+    `machstart(x)` (empty in `comm0.h`, called at the start of each pass)
+    as `(model = 1)`; `.68000` still switches back for the rest of the pass.
+  - Test: `m68kcheck.sh` (m68kcheck_test) assembles `move ccr,d0; rtd #4`
+    without a directive (must assemble, m68kcheck clean) and with `.68000`
+    (must fail). Fails without the fix, passes with it.
+  - Scratch full build with the fix: all tests pass; every assembled
+    object byte-identical (only the assembler changed), as no library or
+    compiler output uses 68010 instructions.
+  - User: "yes apply". Fix and test applied (files identical to the tested
+    scratch tree); `Tasks.md` A2 fixed. Not committed.
