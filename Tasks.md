@@ -309,11 +309,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
   (mod 8) addresses, from its own allocator in `asscm.c`. Same kind as A1.
   Upstream only, unless em22 is ever built here.
-- [ ] **A2 — the minix68k assembler starts in 68000 mode.** A 68010 instruction
-  (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gives "68010 instruction (warning)",
-  and the assembler counts warnings as errors (`warning()` in
-  `mach/proto/as/comm7.c`), so assembly fails unless the file has `.68010`. For
-  a 68010-only target the default could be 68010 (`model = 1`). Found with T6.
+- [x] **A2 — the minix68k assembler started in 68000 mode** (fixed 2026-10-31). A
+  68010 instruction (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gave "68010
+  instruction (warning)", and the assembler counts warnings as errors, so assembly
+  failed unless the file had `.68010` (`model`, defined by `comm3.c`, started at 0).
+  Now `mach/m68k2/as/mach0.c` sets `model = 1` in `machstart()` at the start of
+  every pass; `.68000` still switches back. Test: `m68kcheck_test` assembles
+  `move ccr,d0; rtd #4` without a directive and must fail with `.68000`. Found
+  with T6.
 - [ ] **N11 — file names are not escaped in line directives and `__FILE__`.**
   `cpp.ansi` writes the name between quotes as it is, so a `"` or `\` in a file
   name gives a broken string. Old; rare on Linux.
