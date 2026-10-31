@@ -389,3 +389,30 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   `getarea()`'s blocks in `util/ass/asscm.c` (rounded to `sizeof(int)`
   today) to `_Alignof(max_align_t)`, as A1 did for led, and check with
   `-fsanitize=alignment` and PLATS = all.
+- User: "do the crosscheck of Spec, Plan and code". There is no Spec.md or
+  Plan.md in this repo: the plan, decisions and tests live in `Tasks.md`
+  (with the logs), so `Tasks.md` was checked against the code.
+  - All 74 paths named in `Tasks.md` exist, or are shorthand, install or
+    release paths, or are in the minix-st-2.0.4 repository. Every `*_test`
+    named is a build target. Each ticked item's key change was grepped in
+    the code (E1, E3, E5, E6, F1, F1d, F3, F4, F7, F9, F11, N1, N3, N11,
+    N12, L1, B2, S1, S3, A1, A2, P1, M1, F5, T4-T8, release workflow):
+    all present. `minix204.sh`'s glob of tests/plat core/bugs/floats gives
+    the same files as `tests/plat/build.py`'s list.
+  - Mismatches, all in `Tasks.md` text (none in the code):
+    1. Header: "Nothing here has been fixed yet" (most items are fixed);
+       "Scope: C + BASIC" (BASIC deferred since 2026-10-30).
+    2. "Tests to add" intro: "minix68k has no emulator and is not in
+       `TEST_PLATS` ... nothing is tested", "BASIC ... not wired into the
+       build": out of date since T1-T3 (minix68k is in `TEST_PLATS`).
+    3. F8 ticked, but `plat/minix68k/libsys/build.py` still globs the
+       nonexistent `plat/minix/libsys` (harmless dead entries; noted as
+       remaining, never fixed or given an item).
+    4. N8 says "Now `strlen()`"; B2 (`8a2103d9b`) later removed the DATA
+       file name altogether, so that line no longer exists.
+- User: "yes fix 1, 2 and 4, remove the dead glob". `Tasks.md`: header
+  (what ticked/open mean; scope C and assembler, BASIC deferred), "Tests to
+  add" intro (the 2026-10-29 state, and what runs now), N8 (superseded by
+  B2), F8 (glob removed). `plat/minix68k/libsys/build.py`: the three
+  `plat/minix/libsys` globs removed; scratch build passes (all tests) and
+  `libsys.a` is byte-identical (128 members). Not committed.
