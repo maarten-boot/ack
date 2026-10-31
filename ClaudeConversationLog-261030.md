@@ -1242,3 +1242,6 @@ User:
       skipped a division guard, so `divu` trapped (EM trap 6, EIDIVZ).
       Fix: `kills :cc` on the four muls_w/mulu_w lines. minix68k only
       (linux68k has `WORD_SIZE==4` and uses `.l`).
+- With all ten scratch fixes: seeds 1-1000 and 3001-5000 (3000 programs)
+  all equal at all five levels, so 1-5000 is clean. The ten fixes are saved
+  as `t7/fixes1-10.patch` in the scratchpad (against `207d9c525`).
