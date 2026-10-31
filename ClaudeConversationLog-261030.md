@@ -1347,3 +1347,6 @@ User:
   > Independent of #381 and #382.
   >
   > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- User: "yes apply". The extended andbool, foldoverflow and foldcii taken
+  from `upstream/codegen-fixes` into the fork, so both have the same tests
+  (checked on minix68k in the scratch build of the fork head above).
