@@ -34,6 +34,7 @@ allsets = {
         "tests/plat/core/exg,e,.e",
         "tests/plat/core/foldcii,e,-O3,.c",
         "tests/plat/core/foldoverflow,e,-O3,.c",
+        "tests/plat/core/initlong,e,.c",
         "tests/plat/core/inn,e,.e",
         "tests/plat/core/intadd,e,.c",
         "tests/plat/core/intcmp,e,.c",

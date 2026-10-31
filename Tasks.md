@@ -388,9 +388,11 @@ In order of value:
   `paranoia.sh` fails on no normal end, any FAILURE/SERIOUS DEFECT/DEFECT, or more
   than `MAX_FLAWS` = 2 FLAWs (the known F1b flaws: lower it when F1b is fixed). Not
   yet a test: the bit-exact float differential test used for F1.
-- [ ] **T5 — regression tests for the branch's earlier fixes**: initialised `long`s and
-  structs with longs keep their layout (`con_mult()` `.data4` fix, check with `size`
-  of data or in the emulator); `cv` header is 32 bytes (`8625a2877`).
+- [x] **T5 — regression tests for the branch's earlier fixes** (done 2026-10-31).
+  Initialised `long`s and structs with longs keep their layout (`con_mult()`
+  `.data4` fix, `eaa025860`): `tests/plat/core/initlong,e,.c`, fails with
+  `.data8`. The 32-byte `cv` header (`8625a2877`) was already checked by
+  `cvcheck.py` (cv_test).
 - [x] **T6 — 68010 instruction check without an emulator** (done 2026-10-30).
   68020 integer instructions and addressing modes cannot get in: the m68k2
   assembler rejects them. New host tool `plat/minix68k/m68kcheck` (installed as
