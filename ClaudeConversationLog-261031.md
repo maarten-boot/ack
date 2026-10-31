@@ -29,3 +29,22 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   - User: "yes apply". Fix in `salloc.c`, `Tasks.md` S3. Committed at the
     user's request ("first commit") while the local full sanitizer build
     of the working tree was still running.
+  - GitHub: `build-linux-sanitizers` has failed on every push since the
+    `diff_test` commit (`7ed65fac2`, 12:58), push and pull_request runs;
+    `build-linux` and `build-linux-clang` pass. In each run the only
+    failures are diff seeds 22 (-O2) and 54 (-O0, -O), the S3 bug. Earlier
+    runs (up to 12:43) passed.
+  - Local full build of the working tree with the fix (scratch copy), with
+    the job's flags (`CC=$SAN HOSTCC=$SAN`, `ASAN_OPTIONS=detect_leaks=0`):
+    rc 0, all 112 tests pass, `diff_test` included, no sanitizer report.
+- Pushed by the user; CI for `ec2730fa1` green (push and pull_request,
+  all three jobs).
+- User asked about reading Dependabot issues: the fork has Dependabot
+  alerts disabled, issues off, no `dependabot.yml`, no Dependabot PRs;
+  upstream has none visible (alerts need admin). User: "no its ok, continue".
+- A1 started (analysis only): `led` keeps a module in ALLOMODL as header
+  (`struct outhead`, 20 bytes), section table (`struct outsect`, 20 bytes
+  each), name table (`struct outname`, 16 bytes with an 8-byte pointer on a
+  64-bit host), strings; the name table is at 20 + 20 * nsect, 8-aligned
+  only for odd nsect. `int_align()` rounds to `sizeof(int)`. Full build
+  with `-fsanitize=alignment` running in scratch to list all places.
