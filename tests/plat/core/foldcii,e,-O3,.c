@@ -31,6 +31,36 @@ static int32_t h(void)
     return (int32_t)(int16_t)l;
 }
 
+/* The same with int, for every word size. */
+
+static int fi(void)
+{
+    int l = 16384;
+
+    return (int8_t)l ? a : b;
+}
+
+static int ki(void)
+{
+    int l = 384;
+
+    return (int8_t)l + 0;
+}
+
+static long hi(void)
+{
+    int l = 384;
+
+    return (long)(int8_t)l;
+}
+
+static void si(void)
+{
+    int l = 16384;
+
+    arr[(int8_t)l ? 4 : 2] = 2;
+}
+
 /* Bypasses the CRT, so there's no stdio. */
 void _m_a_i_n(void)
 {
@@ -39,6 +69,11 @@ void _m_a_i_n(void)
     ASSERT(arr[4] == 0);
     ASSERT(g() == 2);
     ASSERT(h() == 45219L - 65536L);
+    ASSERT(fi() == 2);
+    ASSERT(ki() == -128);
+    ASSERT(hi() == -128L);
+    si();
+    ASSERT(arr[2] == 2);
 
     finished();
 }
