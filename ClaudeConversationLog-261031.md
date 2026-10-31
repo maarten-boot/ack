@@ -48,3 +48,28 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   64-bit host), strings; the name table is at 20 + 20 * nsect, 8-aligned
   only for odd nsect. `int_align()` rounds to `sizeof(int)`. Full build
   with `-fsanitize=alignment` running in scratch to list all places.
+- A1 analysis. Scratch build of HEAD with `-fsanitize=alignment` (reports
+  only, no abort): 1493 reports, all in `led` (and `rd.c` writing into
+  led's memory), each 8-byte-aligned type at a 4 (mod 8) address:
+  `struct outname` (relocate.c, finish.c, extract.c, rd.c `rd_name`),
+  `struct ar_hdr` (scan.c:141, save.c:53), `ind_t` (scan.c 327-585).
+  Cause: with USEMALLOC each piece is its own malloc block (aligned), but
+  offsets inside ALLOMODL are only 4-aligned: the archive magic takes
+  `sizeof(int)`, `int_align()` rounds to `sizeof(int)`, and the name table
+  is at 20 + 20 * nsect after the header and section table. Everything
+  after the magic of an archive is then 4 off.
+  - Fix tried in scratch (`util/led`: memory.h, scan.h, scan.c, save.c):
+    `int_align()` rounds to `_Alignof(max_align_t)`; the magic advances by
+    `int_align(sizeof(int))` (scan.c and save.c); IND_SECT, IND_NAME and
+    IND_EMIT start aligned; `modulsize()` is computed from the IND_ layout
+    so the pieces `direct_alloc()` and `read_modul()` allocate add up to it
+    (`alloc()` rounds each ALLOMODL piece); `align()` dropped.
+  - Rebuild of the same tree with the fix (same flags): 0 reports, all
+    tests pass; every program led linked again (examples, tests) is
+    byte-identical; archives differ only in the 2 date bytes per member.
+  - Full build with the job's flags minus `-fno-sanitize=alignment`
+    (ASan + UBSan incl. alignment, no recover, detect_leaks=0) with the
+    fix: rc 0, all 112 tests pass, no sanitizer report.
+  - User: "yes apply". `util/led` fix applied (files identical to the tested
+    scratch tree), `ccpp.yml`: `-fno-sanitize=alignment` dropped and the
+    comment updated; `Tasks.md`: A1 fixed, T8 note updated. Not committed.
