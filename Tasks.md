@@ -123,6 +123,14 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   pc (`cstoper.c` sign extension and masks), ncg `fillem.c` (`rombit`), ego `cset.c`
   and Musashi's `divs` (`plat/linux68k/emu/musashi/m68k_in.c`). Shift as unsigned; all
   minix68k output byte-identical.
+- [x] **S3 — ncg freed strings still held in the condition codes** (fixed
+  2026-10-31, all ncg back ends; found by the sanitizer job running
+  `diff_test`, seeds 22 and 54). `garbage_collect()` (`mach/proto/ncg/salloc.c`)
+  marked the strings in use from `machregs+1`, skipping `machregs[0]`, where
+  `setcc()` keeps the token of the last instruction that set the condition
+  codes; `test()` then `strcmp`ed the freed string (ASan heap-use-after-free in
+  `eqtoken`). Reused memory could make a needed test look done. Now
+  `machregs[0]` is scanned too (skipped when it holds a register).
 - [ ] **A1 — misaligned struct accesses in the linker.** UBSan "alignment":
   `util/led` (`relocate.c`, `scan.c`, `save.c`, `finish.c`, `extract.c`) and
   `modules/src/object/rd.c` read `struct outname`/`outsect` (with 8-byte members on
