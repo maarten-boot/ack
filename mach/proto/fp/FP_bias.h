@@ -26,3 +26,14 @@
 #define	DBL_MIN		     1	/*	standard definition	*/
 #define EXT_MAX		 16383	/*	standard minimum	*/
 #define EXT_MIN		-16382	/*	standard minimum	*/
+
+		/*	2) INFINITY AND NAN IN EXTEND	*/
+		/* The exponent EXT_INFNAN; the mantissa is NORMBIT for an	*/
+		/* infinity, more for a NaN (not 0: that would be a zero)	*/
+#define EXT_INFNAN	 32767
+#define EXT_QNAN	0xC0000000L	/* NORMBIT and the quiet bit	*/
+#define EXT_ISNAN(e)	((e)->exp == EXT_INFNAN && \
+			 (((e)->m1 & 0x7FFFFFFFL) | (e)->m2) != 0)
+#define EXT_ISINF(e)	((e)->exp == EXT_INFNAN && \
+			 (((e)->m1 & 0x7FFFFFFFL) | (e)->m2) == 0)
+#define EXT_ISZERO(e)	(((e)->m1 | (e)->m2) == 0)

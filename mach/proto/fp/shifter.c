@@ -54,6 +54,29 @@ int	n;
 	}
 }
 
+/*
+ * Shift right n > 0 bits and OR the bits shifted out into the lowest bit
+ * (the "sticky" bit): rounding later must know whether anything nonzero
+ * was lost. There are always guard bits below a single or double result.
+ */
+void
+b64_jsft(e1,n)
+B64	*e1;
+int	n;
+{
+	unsigned long lost;
+
+	if (n > 63)
+		lost = e1->h_32 | e1->l_32;
+	else if (n >= 32)
+		lost = e1->l_32 | (e1->h_32 & ((1UL << (n - 32)) - 1));
+	else
+		lost = e1->l_32 & ((1UL << n) - 1);
+	b64_sft(e1, n);
+	if (lost)
+		e1->l_32 |= 1;
+}
+
 void
 b64_lsft(e1)
 B64	*e1;

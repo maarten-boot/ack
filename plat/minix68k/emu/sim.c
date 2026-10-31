@@ -15,7 +15,7 @@
  * violation, ...) is reported and ends the run with a failure, as do user
  * accesses outside the process (NULL pointers) and writes into its text.
  *
- * -t traces every user instruction to stderr.
+ * -t traces every user instruction to stderr, -s every system call.
  */
 
 #include <stdio.h>
@@ -104,6 +104,7 @@ static uint32_t brk_pos;
 
 static uint32_t last_user_pc;
 static int tracing;
+static int systrace;
 
 static void cleanup_and_exit(int status)
 {
@@ -362,6 +363,10 @@ static void minix_syscall(void)
 		fail("message at odd address 0x%06x", m);
 	user_buffer(m, MESS_SIZE, 1);
 	call = msg_int(m, M_TYPE);
+	if (systrace)
+		fprintf(stderr, "syscall %d to %s: i1=%d i2=%d i3=%d p1=0x%x",
+		    call, who == 0 ? "MM" : "FS", msg_int(m, M1_I1), msg_int(m, M1_I2),
+		    msg_int(m, M1_I3), rd32(m + M1_P1));
 
 	switch (call)
 	{
@@ -491,6 +496,8 @@ static void minix_syscall(void)
 			    who == 0 ? "MM" : who == 1 ? "FS" : "?");
 	}
 
+	if (systrace)
+		fprintf(stderr, " -> %d\n", r);
 	wr16(m + M_SOURCE, who);
 	wr16(m + M_TYPE, (uint16_t)r);
 	m68k_set_reg(M68K_REG_D0, 0);
@@ -640,15 +647,18 @@ int main(int argc, char* argv[])
 	uint32_t sp;
 	int i;
 
-	while (argc > 1 && strcmp(argv[1], "-t") == 0)
+	while (argc > 1 && (strcmp(argv[1], "-t") == 0 || strcmp(argv[1], "-s") == 0))
 	{
-		tracing = 1;
+		if (argv[1][1] == 't')
+			tracing = 1;
+		else
+			systrace = 1;
 		argc--;
 		argv++;
 	}
 	if (argc < 2)
 	{
-		fprintf(stderr, "usage: emu [-t] <minix68k program> [args...]\n");
+		fprintf(stderr, "usage: emu [-t] [-s] <minix68k program> [args...]\n");
 		exit(EXIT_FAILURE);
 	}
 

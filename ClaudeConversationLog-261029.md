@@ -363,3 +363,80 @@ User:
   commit (the lookup did not dereference `v3.0.3^{}`); now the commit `efb35369…`.
   All three pins verified via the GitHub API as commits, with `using: node24` in
   their `action.yml` at that commit.
+
+### First release
+
+User:
+> i pushed the tag and made a pr to my default branch
+
+- Tag `minix68k-20261029` on `890b3af0c`: the "minix68k release" workflow
+  (run 40961123939) succeeded on its first run; release
+  https://github.com/maarten-boot/ack/releases/tag/minix68k-20261029 with
+  `ack-minix68k-20261029-linux-x86_64.tar.gz` (3.3 MB) and its `.sha256`.
+- Checked as a consumer: downloaded, `sha256sum -c` OK, unpacked into a fresh
+  directory; with only `ACKDIR`/`PATH` set to it, a C program with `exp()` and longs
+  compiled and ran in the packaged `minix68k-emu` ("e=2.718282 n=300000
+  sizeof(int)=2"); the README names commit `890b3af`.
+- CI: passed for the branch, the tag and the merge to `default` (PR #1 "Rosco
+  minix68k", merge `0bf4cfbb8`); the pull-request run of the same commit was still
+  running at the time of writing.
+
+### F4: the minix68k descr
+
+User:
+> start with F4
+> what is the difference between 68k2 and 680?0
+
+- Answered: in ACK `m68k2` is a back end/ABI (68000 instructions, 2-byte `int`,
+  4-byte pointers: the Minix-ST ABI), `m68020` a back end for the 68020 (4-byte
+  `int`, 68020 instructions, optional 68881). minix68k uses `ARCH=m68k2` (assembler,
+  libem, libend) with the m68020 *code generator source* built with
+  `-DWORD_SIZE=2 -DTBL68000`. The 68010 is a 68000 with VBR, restartable bus errors,
+  loop mode and a privileged `move sr`: 68000 code runs unchanged.
+- Found: `-lm`/`-lc` failed ("can't read …/lib/minixST/tail_m"); linux68k's mapping
+  `{PLATFORMDIR}/lib*` lacks `.a` too (N9), and no platform builds a `libm` (the maths
+  functions are in libc); `-fp` without a mapping reaches the linker ("bad flag letter
+  f"); `MACHOPT_F` is used by `em_opt` (`-ml10`: replace multiplications by constants,
+  longs too) and is not a leftover; `SYSINCLUDES` only named missing directories.
+- `plat/minix68k/descr`: `-lm` → `libc.a`, `-l*` → `{PLATFORMDIR}/lib*.a`, `-fp`
+  swallowed; `CPP_F` with `__minix __m68k __mc68000 __mc68010` (`_ATARI_ST` kept);
+  stale variables and mappings removed; a header comment.
+- Tried `EGO_PLAT_FLAGS` with `m68k2.descr` installed: `-O3` crashes ego's `cs` phase
+  (NULL `lnp` in `instrgroup`, `cs_partit.c:718`, from `gains`, `cs_profit.c:178`),
+  because `cs`/`ud` only run with a machine description and had never run on minix68k
+  code: left out, new task E5.
+- Checked (scratch build): `-lm`, `-lc`, `-fp`, `-lm -fp`, `-ansi` link silently and
+  the program runs; an unknown library gives "can't read …/libnosuch.a"; a program
+  prints `__minix=1 __m68k __mc68000 __mc68010 __unix` (no `__mc68020`); all 520
+  minix68k library members and the start-up objects are byte-identical to the
+  `minix68k-20261029` release; the whole suite passes at `-O` and with all libraries
+  and tests built at `-O3` (47/47 each).
+
+### Small-fix batch (N1-N5, F6, F8)
+
+User:
+> i pushed (CI for `c2ba85b12` passed)
+> yes start with the small-fix batch
+
+- N1 `util/cmisc/tabgen.c` `getln()`: stop one short and terminate at `s[n-1]`
+  (was `s[-2]` when a line filled the buffer). ASan: the old code reports
+  "stack-buffer-underflow, WRITE of size 1" at `tabgen.c:353` on a 5000-character
+  line, the new one nothing.
+- N2 printf types: `stab.c` bit-field width `(long)` for `%ld` (`-g` output);
+  `anm`/`ashow`/`asize` `uint32_t` cast to `unsigned long` (`%lu`/`%lx`); ego
+  `coreusage` `size_t` as `%lu`; BASIC lexer debug output `%p` and `%ld`.
+- N3 non-literal formats → `"%s"`: `archiver.c` (member names), cpp `err_hdr`,
+  BASIC `DATA` floats and the `-E` source listing (a `%` in a BASIC line was read as a
+  format).
+- N4 `cv()` macro wrapped in `do { } while (0)`; `parsepar.c` indentation;
+  `peephole.c` `rotate()` shifts as `unsigned long` (both shifts could shift a
+  negative value).
+- N5 `(unsigned char)` at the char-indexed sites (cemcom `LLlex.c` and
+  `options.c`, cpp `domacro.c` and `options.c`, m2 `LLlex.c`, ego `alloc.c`); the
+  class macros are unchanged (some lexers index tables with EOI = -1).
+- F8 `cv.c`: `%d` for `oh_nsect`, `chmem()` `default` is a fatal error,
+  `emits()` uses one static buffer instead of a malloc per 16K. F6 `boot.s`:
+  comments only (what the code does with the Minix stack, `add #010,sp`).
+- Checked with two clean builds (baseline and batch, plain `make`): 47/47 tests each;
+  all 106 minix68k programs/objects and 521 archive members byte-identical; the five
+  character tables `tabgen` generates identical (only the `tabgen` binary differs).

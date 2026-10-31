@@ -10,6 +10,7 @@
 */
 
 #include "FP_bias.h"
+#include "FP_shift.h"
 #include "FP_trap.h"
 #include "FP_types.h"
 
@@ -42,13 +43,36 @@ EXTEND	*e1,*e2;
 	int maxv = 4;
 #endif
 
+	if (EXT_ISNAN(e1))
+		return;
+	if (EXT_ISNAN(e2)) {
+		*e1 = *e2;
+		return;
+	}
+	e1->sign ^= e2->sign;
+	if (e1->exp == EXT_INFNAN) {	/* infinity / x */
+		if (e2->exp == EXT_INFNAN)
+			e1->m1 = EXT_QNAN;	/* infinity / infinity */
+		return;
+	}
+	if (e2->exp == EXT_INFNAN) {	/* x / infinity == 0 */
+		e1->m1 = e1->m2 = 0L;
+		e1->exp = 0;
+		return;
+	}
 	if ((e2->m1 | e2->m2) == 0) {
+		if ((e1->m1 | e1->m2) == 0) {	/* 0 / 0 */
+			e1->m1 = EXT_QNAN;
+			e1->exp = EXT_INFNAN;
+			return;
+		}
                 /*
                  * Exception 8.2 - Divide by zero
                  */
-		trap(EFDIVZ);
-		e1->m1 = e1->m2 = 0L;
-		e1->exp = EXT_MAX;
+		trap(EFDIVZ);	/* if it returns: infinity */
+		e1->m1 = NORMBIT;
+		e1->m2 = 0L;
+		e1->exp = EXT_INFNAN;
 		return;
 	}
 	if ((e1->m1 | e1->m2) == 0) {	/* 0 / anything == 0 */
@@ -66,8 +90,6 @@ EXTEND	*e1,*e2;
 	e1->exp++;
 	e2->exp++;
 #endif
-	/*	check for underflow, divide by zero, etc	*/
-	e1->sign ^= e2->sign;
 	e1->exp -= e2->exp;
 
 #ifndef USE_DIVIDE
@@ -243,6 +265,11 @@ EXTEND	*e1,*e2;
                 INEXACT();
 #endif
 	e1->mantissa = result;
+#ifndef USE_DIVIDE
+	/* all 64 quotient bits done and a remainder left: sticky bit */
+	if (count < 0 && error)
+		e1->m2 |= 1;
+#endif
 
 	nrm_ext(e1);
 	if (e1->exp < EXT_MIN)	{
@@ -259,8 +286,9 @@ EXTEND	*e1,*e2;
                  * Exception 8.3 - Overflow
                  */
                 trap(EFOVFL);   /* overflow */
-                e1->exp = EXT_MAX;
-                e1->m1 = e1->m2 = 0L;
+                e1->exp = EXT_INFNAN;
+                e1->m1 = NORMBIT;
+                e1->m2 = 0L;
                 return;
         }
 }

@@ -10,7 +10,9 @@
 
 
 
-! EM runtime start-off for the Bleasdale 68000 system
+! EM run-time start-off for minix68k (Minix-ST), taken from an older 68000
+! port (Bleasdale). Programs built by the rosco Minix port start with Minix's
+! own crtso instead; this one is used by ACK's own minix68k libraries.
 
 
 LINO_AD	= 0
@@ -27,9 +29,12 @@ EBADGTO = 27
 
 	.sect .text
 begtext:
-	! Bleasdale puts the argument and environment vectors
-	! themselves on top of the stack, instead of POINTERS
-	! to these vectors. We get things right here.
+	! Minix puts the argument and environment vectors themselves on
+	! the stack: argc (long), argv[0..argc-1], 0, envp[...], 0, and
+	! then the strings. main wants argc, a pointer to argv and a
+	! pointer to envp; build that here.
+	! The long just before the first string (argv[0]) is the 0 that
+	! ends envp; clear it anyway.
 	move.l	4(sp),a0
 	clr.l	-4(a0)
 	move.l	sp,a0
@@ -52,7 +57,7 @@ begtext:
 
 	add.l	#2,sp !convert argc from 4-byte to 2-byte
 	jsr	__m_a_i_n
-	add	#010,sp
+	add	#010,sp		! 8 of main's 10 argument bytes; harmless, EXIT follows
 EXIT:
 	move.w	d0,-(sp)
 	jsr	__exit

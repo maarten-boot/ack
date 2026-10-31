@@ -11,19 +11,30 @@
 #include "astring.h"
 
 #if defined WIN32 || defined __minix
-static unsigned temper(unsigned x)
+/* No rand_r() there. Use unsigned long: the tempering needs 32 bits, and
+ * int is only 16 bits on Minix-ST. */
+typedef unsigned long seed_t;
+
+static unsigned long temper(unsigned long x)
 {
 	x ^= x>>11;
-	x ^= x<<7 & 0x9D2C5680;
-	x ^= x<<15 & 0xEFC60000;
+	x ^= x<<7 & 0x9D2C5680UL;
+	x ^= x<<15 & 0xEFC60000UL;
 	x ^= x>>18;
 	return x;
 }
 
-static int rand_r(unsigned *seed)
+static unsigned long next_random(seed_t *seed)
 {
-	*seed = *seed * 1103515245 + 12345;
+	*seed = *seed * 1103515245UL + 12345;
 	return temper(*seed)/2;
+}
+#else
+typedef unsigned int seed_t;
+
+static unsigned long next_random(seed_t *seed)
+{
+	return rand_r(seed);
 }
 #endif
 
@@ -31,21 +42,21 @@ char* sys_maketempfile(const char* prefix, const char* suffix)
 {
 #if defined __minix
 	/* Minix 2.0.4 (the rosco build of the passes): no clock_gettime() */
-	unsigned int seed = (unsigned int)(long)prefix
-		^ (unsigned int)time(NULL) ^ (unsigned int)getpid();
+	seed_t seed = (seed_t)(long)prefix
+		^ (seed_t)time(NULL) ^ (seed_t)getpid();
 #else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 
-	unsigned int seed = (unsigned int)(intptr_t)prefix
-		^ (unsigned int)ts.tv_sec ^ (unsigned int)ts.tv_nsec;
+	seed_t seed = (seed_t)(intptr_t)prefix
+		^ (seed_t)ts.tv_sec ^ (seed_t)ts.tv_nsec;
 #endif
 	const char* tempdir = sys_gettmpdir();
 
 	for (;;)
 	{
-		unsigned int hash = rand_r(&seed);
-		char* filename = aprintf("%s/ack.%s-%x%s%s",
+		unsigned long hash = next_random(&seed);
+		char* filename = aprintf("%s/ack.%s-%lx%s%s",
 			tempdir, prefix, hash,
 			((*suffix == 0) || (*suffix == '.')) ? "" : ".",
 			suffix);

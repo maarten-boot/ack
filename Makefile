@@ -9,9 +9,18 @@ DEFAULT_PLATFORM ?= minix68k
 
 # Which architectures should get built?
 
-$(if $(PLATS), $(error Don't set PLATS on the command line, because reasons. Edit the Makefile instead.))
-PLATS = minix68k
+# (Can also be given on the command line, e.g. make PLATS="minix68k pc86":
+# build/ab.mk regenerates the build when it changes.)
+
+PLATS ?= minix68k
 # PLATS = linux386 linuxppc linuxmips
+
+# Where the build goes. The build runs commands in sandboxes inside OBJ
+# with paths relative to the source tree (build/_sandbox.py), so OBJ must
+# be a relative path inside it.
+
+$(if $(filter /% ~%,$(OBJ))$(findstring ..,$(OBJ)), \
+	$(error OBJ=$(OBJ): must be a relative path inside the source tree))
 
 # Where should the ACK put its temporary files?
 
