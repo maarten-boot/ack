@@ -378,7 +378,7 @@ In order of value:
   and privileged instructions (`-s` allows privileged ones, for kernel/boot
   code). Test `m68kcheck_test`: all minix68k libraries and start-off files clean,
   and a file with `fmove` and `move sr,d0` must give exactly those two findings.
-- [ ] **T7 — differential tests**: compile the same portable C programs (examples,
+- [x] **T7 — differential tests** (done 2026-10-31): compile the same portable C programs (examples,
   `paranoia.c`, small integer/long/struct tests) with the host gcc and with ACK for
   minix68k, run both (natively and in the emulator), compare outputs. Mind 16-bit
   `int`: use `long` where values exceed 32767.
@@ -387,8 +387,9 @@ In order of value:
     each in `tests/plat/core`; seeds 1-5000 equal at O0..-O4. Permanent
     test `diff_test` (`plat/minix68k/tests/difftest.sh`, `diffgen.py`):
     65 fixed seeds against the host C compiler; longer runs by hand with a
-    seed range. Still to do: the upstream branch with the generic fixes
-    (2, 3, 4, 5, 7, 9).
+    seed range. The generic fixes (2, 3, 4, 5, 7, 9) are upstream PR #383
+    (`upstream/codegen-fixes`); `andbool`, `foldoverflow`, `foldcii` got
+    `int`/`long` cases there and in the fork.
 - [x] **T8 — sanitizer CI job** (done 2026-10-30): `build-linux-sanitizers` in
   `.github/workflows/ccpp.yml` builds all host tools with gcc ASan + UBSan (strict:
   any finding aborts; no leak or alignment checks, see A1) and runs all tests (about
