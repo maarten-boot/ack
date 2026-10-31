@@ -1288,3 +1288,62 @@ User:
   1-60 at O0, the 5 extra at -O3). In the full build (scratch copy) the
   test runs and passes. Also clean with the sanitizer CI job's host
   compiler (gcc ASan+UBSan, no recovery) and with clang.
+- User: "start with step 4" (upstream branch with the generic fixes).
+  Upstream `default` is still `7afa32a0a`; PRs #381 and #382 open. The
+  generic part of `51b75a328` (fixes 2, 4, 7, 9: `ch3mon.c`, `peephole.c`,
+  `patterns`; fixes 3, 5: 4 of the 12 table hunks) applies to `7afa32a0a`
+  unchanged. Scratch tree of `7afa32a0a` + those fixes + the six tests,
+  `PLATS = all` (upstream's default): builds, all tests pass on cpm,
+  linux68k, linuxppc, pc86. (A first run stopped on "No space left": the
+  scratch trees had filled the root disk; removed the finished ones.)
+- Same tree without the fixes (`ninja -k 0`): negunsigned fails on all four
+  platforms, bytediv and mulminus1 on linux68k; andbool, foldoverflow and
+  foldcii passed, because they were written for 16-bit int. Added cases
+  with `int`/`long` operands: andbool then fails on linux68k, foldoverflow
+  and foldcii (-O3) on linux68k, linuxppc and pc86; all pass with the fixes
+  (full build again), and on minix68k (scratch build of the fork head with
+  the extended tests: all minix68k tests pass, diff_test included).
+- User: "yes make the upstream branch". `upstream/codegen-fixes` from
+  `7afa32a0a` (worktree in scratch, removed afterwards), three commits,
+  each with its tests and `tests/plat/build.py` entries:
+  `284586dfa` cemcom.ansi unary - (negunsigned), `e58cf9b35` em_opt
+  repl_mul and the fold checks (mulminus1, foldoverflow, foldcii),
+  `7eb551ec9` m68020 table move.b cc and tXX and (bytediv, andbool). The
+  tree is the one tested above (diff against it: only build output).
+- PR text (to davidgiven/ack, base `default`, head
+  `maarten-boot:upstream/codegen-fixes`):
+
+  Title: Code generation fixes found by differential testing
+
+  > I compiled random C programs (integer arithmetic of all widths,
+  > conversions, comparisons, guarded division, shifts, loops, switches,
+  > arrays, structs) with gcc and with the ACK at -O0 to -O4 and compared
+  > the output. These are the differences that are not specific to my
+  > target; each commit has a test in tests/plat/core that fails without
+  > it.
+  >
+  > - **cemcom.ansi**: unary `-` of an unsigned constant was not cut to the
+  >   type's size (`~` was), so `-(unsigned long)1371337135 / 193754694`
+  >   folded to 717414569 instead of 15. Fails on all four tested
+  >   platforms.
+  > - **em_opt**:
+  >   - `repl_mul` (`-ml`) kept the multiplier in a 64-bit `unsigned
+  >     long`: `x * 0xFFFFFFFFUL` became a shift by 64 and gave 0 on
+  >     linux68k.
+  >   - `loc loc adu/sbu/mlu/sli/slu` (and the `ldc` forms) folded to
+  >     constants that do not fit the word, and `loc loc loc cii/ciu`
+  >     folded without sign-extending the constant (`(int8_t)16384` stayed
+  >     16384). Both show at -O3, when ego propagates constants: the tests
+  >     fail on linux68k, linuxppc and pc86.
+  > - **m68020 ncg table** (linux68k):
+  >   - the `memory1` coercion (`clr`, `move.b`) kept the condition codes
+  >     of the byte as those of the register: `(uint8_t)l / 16` with
+  >     l = -300 gave 14.
+  >   - `x & (a op b)` was done as "clear bit 0 of x if false", only right
+  >     for x of 0 or 1: `(x >> s) & (a < b)` with x = -8017 gave -8017.
+  >
+  > Tested: `make` with `PLATS = all`, all tests pass on cpm, linux68k,
+  > linuxppc and pc86; without the fixes the new tests fail as described.
+  > Independent of #381 and #382.
+  >
+  > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
