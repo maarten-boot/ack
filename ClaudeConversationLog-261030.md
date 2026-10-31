@@ -1228,3 +1228,8 @@ User:
   last three: 4 left, all -O3/-O4). ego phases bisected for (9) with a scratch
   `EGO_PHASES` hack in em_ego (not for the repo; em_ego's own `uphases`
   are never filled).
+- Seeds 1-3000 with all nine scratch fixes: 2997 equal at all five levels;
+  3 still differ at every level (so not ego): 1747 and 2334 (one wrong value
+  each), 2676 (stops in the emulator). Not investigated yet: next session.
+  Scratch generator and runner: `t7/diffgen.py`, `t7/run.sh` (scratchpad);
+  the nine fixes exist only in the scratch tree `fork2`.
