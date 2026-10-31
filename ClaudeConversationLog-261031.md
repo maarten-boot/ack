@@ -380,3 +380,7 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
     rc 0; without a tree: skipped, rc 0. Before `SIGRETURN`: `setjmp` and
     `libc` failed ("unsupported system call 75"). Files identical to the
     tested scratch tree. Not committed.
+- User: "pushed, check CI". Run 41239455715 (`c69c319de`): build-linux,
+  build-linux-sanitizers, build-linux-clang all success. In build-linux the
+  pinned minix-st-2.0.4 was fetched and `minix204-test` ran: library built,
+  `core/calloc` XFAIL, "minix204: 37 passed, 0 failed".
