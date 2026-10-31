@@ -223,3 +223,45 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
     at lines 0x1e-0x27). Portable C, runs on every platform.
   - User: "yes apply". Test and build.py entry (files as tested), Tasks.md
     T5 done. Not committed.
+- User: "continue with N11 and Fc1, explain N9" (read as F1c).
+- N11 (scratch only). cpp.ansi reads the name in `#line N "name"` with its
+  escapes processed (`quoted()`), and so does cemcom.ansi in `# N "name"`,
+  but cpp.ansi wrote the name back between quotes as it is (line_dir in
+  preprocess.c, `__FILE__` in replace.c macro_func). A `"` or `\` in a
+  file name gave a broken string; a name from #line lost its escapes.
+  - Fix: `quoted_name()` in replace.c (declared in replace.str): the name
+    as a string literal, `"` and `\` escaped, other control characters as
+    3-digit octal; used by line_dir and `__FILE__`.
+  - Test (`lang/cem/cpp.ansi/longpath.sh`): a directory `q"b\c` (line
+    directives, `__FILE__`, and the output preprocessed again) and
+    `#line 5 "a\"b\\c\tt"`. Fails without the fix (cpp cannot read its own
+    output back), passes with it; full scratch build passes. End to end:
+    ack -mminix68k on `q"b\c/t.c` with an error reports
+    `".../q"b\c/t.c", line 2`, the real name.
+  - Generic (cpp.ansi is shared): an upstream candidate, next to #380.
+- F1c (analysis). printf's `%e`/`%f`/`%g` use `_ecvt`/`_fcvt` →
+  `_ext_str_cvt()` (core/stdlib/ext_comp.c), which scales the value into
+  [1, 10) with 64-bit-mantissa powers of ten and takes digits from that;
+  each scaling rounds, so digit 17 can be off and digits beyond are not the
+  exact expansion. Exact method: a double is m * 2^e (m < 2^53); for
+  e >= 0 the integer m << e (up to 1077 bits), for e < 0 the integer
+  m * 5^-e with the decimal point -e places from the right (up to about
+  2550 bits, 767 significant digits for the smallest subnormal). Big
+  integer in 16-bit limbs (32-bit products; minix68k has no 32x32 multiply
+  in hardware), multiply by 5^6 per step, digits by dividing by 10^4;
+  round half to even on the exact digits. Cost: about 160 limbs, ~1 KB of
+  code in every program that prints floats, and on a 68010 thousands of
+  limb operations for very large or very small numbers (fast for ordinary
+  ones). Not yet written.
+- N9 (explanation). `-l<name>` in ack's descr files maps to a library
+  path; minix68k (F4) has `mapflag -l* LNAME={PLATFORMDIR}/lib*.a` and
+  `-lm` → libc.a. linux68k, linuxppc, linux386, linuxmips, osxppc, em22
+  and cpm have `mapflag -l* LNAME={PLATFORMDIR}/lib*`: `-lfoo` gives
+  `.../libfoo` without `.a`, which no build installs, so led cannot open
+  it; and no platform builds a separate libm (the maths functions are in
+  libc), so `-lm`, the common case, fails everywhere but minix68k. Fix as
+  F4: add `.a`, map `-lm` to libc.a. Upstream only (other platforms).
+- User: "make a note but skip N9 and F1c". Noted in `Tasks.md` under both
+  (skipped, with the fix/design). N11 waits for "yes apply".
+- User: "yes apply". N11 fix and test applied (files identical to the
+  tested scratch tree); `Tasks.md` N11 fixed. Not committed.
