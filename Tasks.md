@@ -201,7 +201,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `LIB`, `SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `-ansi` mapping and `{FLOATS?}` are
   gone. Correction: `MACHOPT_F=-ml10` is not a leftover, it tunes `em_opt`
   (multiplications by constants) and stays. `EGO_PLAT_FLAGS` is left out: see E5.
-- [ ] **F5 — minix68k and Minix-ST 2.0.4.**
+- [x] **F5 — minix68k and Minix-ST 2.0.4.** (done 2026-10-31)
   **Decision (2026-10-29): minix68k targets Minix-ST 2.0.4**, the system on the
   rosco_m68k board (not Minix 3: MMU, ELF, another message ABI, no 68k port).
   Findings (read-only look at `../minix-st-2.0.4`, see `ClaudeConversationLog-261029.md`):
@@ -326,6 +326,9 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
   (mod 8) addresses, from its own allocator in `asscm.c`. Same kind as A1.
   Upstream only, unless em22 is ever built here.
+  *Skipped (2026-10-31, user's decision): upstream only.* Fix as A1: align
+  the blocks of `asscm.c`'s allocator to `_Alignof(max_align_t)` (it rounds
+  to 4 today), then check with `-fsanitize=alignment` and PLATS = all.
 - [x] **A2 — the minix68k assembler started in 68000 mode** (fixed 2026-10-31). A
   68010 instruction (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gave "68010
   instruction (warning)", and the assembler counts warnings as errors, so assembly

@@ -384,3 +384,8 @@ Continues `ClaudeConversationLog-261030.md` (the session ran past midnight).
   build-linux-sanitizers, build-linux-clang all success. In build-linux the
   pinned minix-st-2.0.4 was fetched and `minix204-test` ran: library built,
   `core/calloc` XFAIL, "minix204: 37 passed, 0 failed".
+- User: "yes tick F5; skip A3 but make a note". `Tasks.md`: F5 done
+  (2026-10-31); A3 skipped (upstream only), with the fix noted: align
+  `getarea()`'s blocks in `util/ass/asscm.c` (rounded to `sizeof(int)`
+  today) to `_Alignof(max_align_t)`, as A1 did for led, and check with
+  `-fsanitize=alignment` and PLATS = all.
