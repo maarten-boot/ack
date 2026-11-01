@@ -161,3 +161,15 @@
     "sigreturn restores the condition codes") is older and not an ancestor.
   When calloc is fixed and pushed: move MINIX204_SHA in ccpp.yml and drop
   the xfail in minix204.sh (an XPASS fails the test, so the fix shows up).
+- CI 41355716201 (rosco-minix68k, 66454fd47): all three jobs succeeded;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- Upstream: davidgiven merged #385 (led-align, 2026-11-01 21:38, "Excellent,
+  thanks. Merging.") and #389 (basic-data-test, 21:46).
+- #376 (tests-plat-wordsize, 1155d5a4f): the user's reply is posted (plus a
+  note that the 68010 is for a Minix 2 port to rosco_m68k); no answer yet.
+  Its checks are from run 41076610938 (2026-10-30): linux succeeded, macOS
+  failed (em_m2 died with signal 6) and Windows failed (em_table_lib.lua:8,
+  Lua 5.5 const) - the same two failures as the fork's led-align run, fixed
+  upstream since by 16d8c4229 and 7ea8f9976. A new CI run (re-run by a
+  maintainer, or a rebase onto current default and force-push) would show
+  green.
