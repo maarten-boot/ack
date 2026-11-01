@@ -65,3 +65,26 @@
     build-linux, build-macos, build-windows succeeded; basic/data_test ran
     on linux68k and pc86 in the Linux and macOS jobs (the Windows job only
     builds ack-setup.exe, no tests).
+- CI 41338108410 (rosco-minix68k, bb4ff5f03): all three jobs succeeded;
+  basic/data_test ran; minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User opened davidgiven/ack PR #389 (upstream/basic-data-test, 9f150bd9d);
+  its CI run 41348790182 is being watched.
+- Question on PR #376 (tests-plat-wordsize), davidgiven 2026-10-31: how big
+  a long is meant by "words smaller than longs", how did these tests pass on
+  the existing big-endian architectures, and could `loc 0; loc 1` be correct
+  with 64-bit values stored out of order? Findings:
+  - The cii cases with `loc 0; loc 1` / `loc -1; loc -1` are inside
+    `#if EM_WSIZE == 2` and convert to 4 bytes: "long" is 4 bytes, the word 2.
+    No 64-bit values are involved.
+  - Upstream's EM_WSIZE == 2 platforms (pc86, cpm) are little-endian; the
+    big-endian ones (linux68k, linuxppc) have 4-byte words and never run the
+    block. The combination 2-byte word + big-endian is minix68k (fork), where
+    cii failed before the change (log 2026-10-29, E4); with ldc it passes.
+  - doc/em/types.nr ("Unsigned integers"): the byte order of an integer of
+    more than one byte is left unspecified, and "One cannot simply pad an
+    unsigned integer with zero's at either end and expect a correct
+    result." So two `loc`s make an implementation-defined 4-byte value;
+    `ldc` is the defined way to push a double-word constant.
+  - Same for aar/inn/rck: pointer size (aar) and the fail() argument only
+    differ when EM_WSIZE != EM_PSIZE (2 vs 4).
+  Draft reply given to the user; user posted it on #376.
