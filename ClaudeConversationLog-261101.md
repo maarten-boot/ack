@@ -139,3 +139,8 @@
     (41223452353), before this change: the branch's base 7afa32a0a predates
     upstream's 16d8c4229 (m2 aliasing) and 7ea8f9976 (Lua 5.5). The PR run
     tests the merge with current default and passes. Not caused by led.
+- CI 41353218932 (rosco-minix68k, 7e14695d2): all three jobs succeeded.
+- User merged fork PR #3 (rosco-minix68k -> default) as 5fa6e5088; CI
+  41353766162 on default: all three jobs succeeded; basic/data_test ran;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User posted the reply on davidgiven/ack #385 (led without brk()).
