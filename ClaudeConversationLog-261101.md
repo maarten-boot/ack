@@ -57,3 +57,11 @@
 - Not enabled on **cpm** (BASIC numbers are floating point; cpm has no floats,
   like the `floats` set) or **linuxppc** (the emulator stops on `rlwimi` in the
   number conversion: "rlwmi not supported").
+- User pushed both branches. CI:
+  - 41336827404 (rosco-minix68k, 159f0246c): build-linux, -clang,
+    -sanitizers succeeded; plat/minix68k/tests/+basic/data_test ran;
+    minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+  - 41337009643 (upstream/basic-data-test, 9f150bd9d, upstream's workflow):
+    build-linux, build-macos, build-windows succeeded; basic/data_test ran
+    on linux68k and pc86 in the Linux and macOS jobs (the Windows job only
+    builds ack-setup.exe, no tests).
