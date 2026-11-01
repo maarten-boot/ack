@@ -127,3 +127,15 @@
     1993308a5. Fork scratch build rc 0, 112 tests; minix204-test 37 passed,
     0 failed, XFAIL core/calloc.
   - Draft reply for #385 given to the user.
+- User pushed upstream/led-align (38656bd76) and rosco-minix68k (b2e6fdc9d).
+  - 41351759986 (davidgiven/ack PR #385, merge with current default):
+    build-linux, -macos, -windows succeeded.
+  - 41351722733 (rosco-minix68k): all three jobs succeeded; minix204-test
+    37 passed, 0 failed, XFAIL core/calloc.
+  - 41351755575 (fork's own run of upstream/led-align): linux succeeded;
+    macOS failed (em_m2 died with signal 6 on lang/m2/libm2 PascalIO.mod for
+    rpi) and Windows failed (h/em_table_lib.lua:8 "attempt to assign to
+    const variable 'line'", Lua 5.5). Same two failures on ab20fbf49
+    (41223452353), before this change: the branch's base 7afa32a0a predates
+    upstream's 16d8c4229 (m2 aliasing) and 7ea8f9976 (Lua 5.5). The PR run
+    tests the merge with current default and passes. Not caused by led.
