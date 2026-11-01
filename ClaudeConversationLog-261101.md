@@ -144,3 +144,20 @@
   41353766162 on default: all three jobs succeeded; basic/data_test ran;
   minix204-test 37 passed, 0 failed, XFAIL core/calloc.
 - User posted the reply on davidgiven/ack #385 (led without brk()).
+- CI 41354887159 (rosco-minix68k, b7416b98f): all three jobs succeeded;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User: the updated minix2 in ../minix-st-2.0.4 may have fixed calloc.
+  Read-only look:
+  - Local branch rosco-m68k at c17cc1a (= the CI pin; origin/rosco-m68k on
+    GitHub is the same). Uncommitted changes: logs, src/kernel/roscdisk.c,
+    src/rosco (Makefile, rootfs), a new ROSCO_M68K_LOG_2026-10-31.md, and
+    src/rosco/test/tmem.c; nothing under src/lib or include.
+  - src/lib/ansi/calloc.c unchanged since the initial import (65b5fc7): no
+    overflow check.
+  - Their own log found it too (ROSCO_M68K_LOG_2026-10-22.md, "calloc()
+    does not check nelem*elsize for overflow (16-bit size_t)") and lists
+    it under "Open ... Library"; no later log mentions a fix.
+  - A stale remote-tracking ref lockdown/rosco-m68k (3b61801, 2026-10-21,
+    "sigreturn restores the condition codes") is older and not an ancestor.
+  When calloc is fixed and pushed: move MINIX204_SHA in ccpp.yml and drop
+  the xfail in minix204.sh (an XPASS fails the test, so the fix shows up).
