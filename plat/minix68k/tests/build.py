@@ -12,7 +12,7 @@ plat_testsuite(
     name="plat_tests",
     plat="minix68k",
     method="plat/minix68k/emu",
-    sets=["core", "bugs", "floats"],
+    sets=["core", "bugs", "floats", "basic"],
 )
 
 # Kahan's floating point test, judged by paranoia.sh. Its own declaration of

@@ -2,8 +2,10 @@
 
 Open issues found in this repository, most important first. `F<n>` refers to the
 findings in `ClaudeConversationLog-261023.md` / `-261024.md`; `N<n>` are new in the
-code check of 2026-10-29 (`ClaudeConversationLog-261029.md`). Nothing here has been
-fixed yet. Scope: Linux host, C + BASIC for minix68k.
+code check of 2026-10-29 (`ClaudeConversationLog-261029.md`). Ticked items are done
+(dated, with the details in that day's log); open ones are marked skipped or deferred
+where that was decided. Scope: Linux host, C and assembler for minix68k (BASIC
+deferred since 2026-10-30; Modula-2 and Pascal not planned).
 
 ## High
 
@@ -201,7 +203,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `LIB`, `SYSINCLUDES`, `C_LIB`, `OLD_C_LIB`, `-ansi` mapping and `{FLOATS?}` are
   gone. Correction: `MACHOPT_F=-ml10` is not a leftover, it tunes `em_opt`
   (multiplications by constants) and stays. `EGO_PLAT_FLAGS` is left out: see E5.
-- [ ] **F5 — minix68k and Minix-ST 2.0.4.**
+- [x] **F5 — minix68k and Minix-ST 2.0.4.** (done 2026-10-31)
   **Decision (2026-10-29): minix68k targets Minix-ST 2.0.4**, the system on the
   rosco_m68k board (not Minix 3: MMU, ELF, another message ABI, no 68k port).
   Findings (read-only look at `../minix-st-2.0.4`, see `ClaudeConversationLog-261029.md`):
@@ -215,9 +217,22 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
     `struct stat`. MM accepts `cv`'s header (ST layout, `a_cpu` 0x04 allowed on a
     68000) and its GEMDOS relocation table: **nothing to change in `cv`**.
   - ACK's own minix68k headers/libsys stay Minix 1.x (V7 style; POSIX calls declared
-    but not implemented). They are only used by ACK's tests and examples. Optional:
-    bring them to 2.0.4 later, or let the emulator also run programs linked against
-    the 2.0.4 C library (as `acc-minix` links), adding the 2.0.4-only calls they use.
+    but not implemented). They are only used by ACK's tests and examples; porting
+    them to 2.0.4 is not planned (the board does not use them).
+  - [x] Optional step done 2026-10-31: the board's combination is tested.
+    `make minix204-test [MINIX204=<minix-st-2.0.4 tree>]`
+    (`plat/minix68k/tests/minix204.sh`) builds the 2.0.4 C library with this ACK
+    (the tree's own `src/rosco/ack/lib/Makefile`, nothing written into the tree),
+    links `crtso.o emrts.o <prog> fphook.o libc.a libm.a libem.a libend.a` and runs
+    `tests/plat` core/bugs/floats (C) and `minix204/libc.c` (output compared with
+    `libc.out`) in the emulator: 37 pass, `core/calloc` expected to fail (2.0.4's
+    `calloc` has no overflow check). The emulator gained 2.0.4's `SIGACTION`,
+    `SIGPROCMASK` and `SIGRETURN` (longjmp's form). Skipped without a tree; CI
+    (`build-linux`) fetches `maarten-boot/minix-st-2.0.4` at a pinned commit.
+    Found for the minix project: ACK-built programs print no floats without
+    `fphook.o` (`libc.a` has only the stub; this ACK never references `_fp_hook`);
+    2.0.4's `size_t` is 16 bits, ACK's headers' 32 (a header 2.0.4 lacks, e.g.
+    `<stdint.h>`, comes from ACK); `calloc` overflow.
 - [x] **P1 — take over the minix project's `-mshort` assembler fix** (done 2026-10-29).
   `mach/m68k2/as/mach1.c` (`eamode[]`) and `mach5.c` (`flag` in `ea_1()`) must be
   `long`: `(RELO2|RELPC)<<8` does not fit a 16-bit `int` when the assembler is built
@@ -275,7 +290,7 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   branch (reached since F4 added `-D__minix`) used 16-bit `unsigned` in `temper()`
   (`x>>18` undefined, 15-bit names). Now `unsigned long` under `WIN32 || __minix`,
   helper renamed `next_random()`, names printed with `%lx`.
-- [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob remains): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
+- [x] **F8 — `cv.c` small issues** (fixed 2026-10-29; the `libsys` glob removed 2026-10-31): `:150` `%ld` for a `uint16_t`; `emits()` mallocs a
   16 KB buffer per chunk; `chmem()` (`:333`) can return an uninitialised `new`.
   `plat/minix68k/libsys/build.py:11-13` globs `plat/minix/libsys`, which does not exist.
 - [x] **F9 — build system** (done 2026-10-30). `.drone.yml` and `.travis.yml` (Ubuntu
@@ -313,6 +328,9 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
   (mod 8) addresses, from its own allocator in `asscm.c`. Same kind as A1.
   Upstream only, unless em22 is ever built here.
+  *Skipped (2026-10-31, user's decision): upstream only.* Fix as A1: align
+  the blocks of `asscm.c`'s allocator to `_Alignof(max_align_t)` (it rounds
+  to 4 today), then check with `-fsanitize=alignment` and PLATS = all.
 - [x] **A2 — the minix68k assembler started in 68000 mode** (fixed 2026-10-31). A
   68010 instruction (`rtd`, `movec`, `moves`, `move ccr,<ea>`) gave "68010
   instruction (warning)", and the assembler counts warnings as errors, so assembly
@@ -343,8 +361,9 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
   as F4: `lib*.a` and `-lm` → `libc.a` in each `descr`.
 - [x] **N8 — BASIC compiles are not reproducible** (fixed 2026-10-30).
   `lang/basic/src/gencode.c` emitted the length of the DATA file name as
-  `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Now
-  `strlen()`. All 49 BASIC test programs compile reproducibly.
+  `(arith)myitoa(strlen(datfname))`: a pointer to a string, so a heap address. Fixed
+  with `strlen()`; since B2 (`8a2103d9b`) the DATA file name is not emitted at all.
+  All 49 BASIC test programs compile reproducibly.
 - [ ] **N6 — merge commit with a placeholder identity.** `c50619962` ("sync from
   upstream", 2026-10-29) is authored by `Your Name <you@example.com>`: set
   `user.name`/`user.email` on the machine that made it. History is pushed, so leave
@@ -355,10 +374,13 @@ fixed yet. Scope: Linux host, C + BASIC for minix68k.
 ACK has a test suite: `tests/plat` (about 60 small self-checking programs in sets
 `core`, `bugs`, `floats`, `long-long`, `m2`, using `tests/plat/lib/test.c`, which only
 needs `write()` and `_exit()`), run by `tests/plat/testdriver.sh` on a per-platform
-emulator (`plat/linux68k/emu`: Musashi plus ~400 lines of syscall shim). minix68k has
-no emulator and is not in `TEST_PLATS` (`build.py`), so **nothing is tested for it
-today** beyond "it compiles". `lang/basic/test` has 49 BASIC programs and 47 expected
-outputs (`*.b.g`), not wired into the build.
+emulator (`plat/linux68k/emu`: Musashi plus ~400 lines of syscall shim). When this
+list was written (2026-10-29) minix68k had no emulator and was not in `TEST_PLATS`, so
+nothing was tested for it beyond "it compiles", and the BASIC tests (`lang/basic/test`)
+were not in the build. Now (T1-T10) `make` runs `tests/plat` core/bugs/floats on
+`plat/minix68k/emu` and the minix68k tests in `plat/minix68k/tests` (BASIC, `cv`,
+68010 check, soft-float, folding, differential, Paranoia), and `make minix204-test`
+the board's combination with the Minix 2.0.4 C library (F5).
 
 In order of value:
 

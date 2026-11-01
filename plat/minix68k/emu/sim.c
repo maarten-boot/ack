@@ -1,7 +1,11 @@
 /*
  * A minimal Minix-ST (minix68k) process emulator for running the ACK test
  * suite: Musashi as a 68010 in user mode, plus just enough of MM and FS to
- * run small C programs.
+ * run small C programs: those linked with ACK's own minix68k library, and
+ * those linked with the Minix 2.0.4 C library as on the rosco_m68k board
+ * (plat/minix68k/tests/minix204.sh), which also use 2.0.4's SIGACTION,
+ * SIGPROCMASK and SIGRETURN (signal(), setjmp/longjmp). No signal is ever
+ * delivered.
  *
  *	emu [-t] <program> [args...]
  *
@@ -58,6 +62,32 @@
 #define SIGNAL 48
 #define IOCTL  54
 
+/* Minix 2.0.4 only (its include/minix/callnr.h): programs linked with the
+ * 2.0.4 C library, as on the rosco board, use them for signal() and
+ * setjmp(). */
+#define SIGACTION   71
+#define SIGPROCMASK 74
+#define SIGRETURN   75
+
+#define MX_NSIG     17 /* signals 1.._NSIG */
+#define MX_SIGKILL  9
+#define MX_SIG_BLOCK   0 /* sigprocmask how (2.0.4 signal.h) */
+#define MX_SIG_UNBLOCK 1
+#define MX_SIG_SETMASK 2
+#define MX_SIG_INQUIRE 4
+#define SIGACTION_SIZE 10 /* handler, sa_mask (long), sa_flags (int) */
+
+/* struct sigcontext with 16 bit int (2.0.4 sys/sigcontext.h): sc_flags,
+ * sc_mask, then struct sigregs: d0-d7, a0-a6, sp, pc (longs), psw, pad. */
+#define SC_SIGCONTEXT  2
+#define SC_NOREGLOCALS 4
+#define SC_FLAGS 0
+#define SC_REGS  6 /* d0 first, a0 at +32 */
+#define SC_A6    (SC_REGS + 14 * 4)
+#define SC_SP    (SC_REGS + 15 * 4)
+#define SC_PC    (SC_REGS + 16 * 4)
+#define SC_SIZE  (SC_REGS + 18 * 4)
+
 /* sendrec() function codes in d0 (plat/minix68k/libsys/_stsndrec.s). */
 #define BOTH 3
 
@@ -71,6 +101,7 @@
 #define M1_I2    6
 #define M1_I3    8
 #define M1_P1    10
+#define M1_P2    14
 #define M2_I1    4
 #define M2_I2    6
 #define M2_L1    10
@@ -101,6 +132,11 @@ static uint32_t data_start; /* start of data */
 static uint32_t bss_end; /* initial break */
 static uint32_t proc_end; /* top of the process (top of stack) */
 static uint32_t brk_pos;
+
+/* Signal state as MM keeps it (2.0.4 SIGACTION, SIGPROCMASK). No signal is
+ * ever delivered: the handlers are only recorded and handed back. */
+static unsigned char sigact[MX_NSIG + 1][SIGACTION_SIZE];
+static uint32_t sigmask;
 
 static uint32_t last_user_pc;
 static int tracing;
@@ -346,6 +382,33 @@ static int16_t msg_int(uint32_t m, int off)
 }
 
 /*
+ * SIGRETURN (2.0.4 kernel/system.c do_sigreturn): restore the registers
+ * from a struct sigcontext. Only the form longjmp() uses is emulated:
+ * SC_NOREGLOCALS (a jmp_buf from ACK's setjmp), which restores d0, a6, sp
+ * and pc. The full register set is only for returning from a signal
+ * handler, and no signal is ever delivered here. The trap returns with
+ * rte, so pc goes into the 68010 exception frame (sr, pc, format) on the
+ * supervisor stack.
+ */
+static int restore_context(uint32_t sc)
+{
+	uint32_t ssp = m68k_get_reg(NULL, M68K_REG_A7);
+	int flags;
+
+	user_buffer(sc, SC_SIZE, 0);
+	flags = (int16_t)rd16(sc + SC_FLAGS);
+	if (!(flags & SC_SIGCONTEXT))
+		return -MX_EINVAL;
+	if (!(flags & SC_NOREGLOCALS))
+		fail("SIGRETURN with a full register set (only longjmp's is emulated)");
+	m68k_set_reg(M68K_REG_D0, rd32(sc + SC_REGS));
+	m68k_set_reg(M68K_REG_A6, rd32(sc + SC_A6));
+	m68k_set_reg(M68K_REG_USP, rd32(sc + SC_SP));
+	wr32(ssp + 2, rd32(sc + SC_PC));
+	return 0;
+}
+
+/*
  * trap #0: _sendrec(who, &message). MM and FS reply in the same message,
  * with the result (or a negative errno) in m_type; d0 = 0 means the
  * message itself was delivered.
@@ -356,6 +419,7 @@ static void minix_syscall(void)
 	int who = m68k_get_reg(NULL, M68K_REG_D1) & 0xffff;
 	uint32_t m = m68k_get_reg(NULL, M68K_REG_A0);
 	int call, r;
+	int restored = 0; /* SIGRETURN: d0 comes from the sigcontext */
 
 	if (function != BOTH)
 		fail("trap #0 with function %d (only sendrec is emulated)", function);
@@ -491,6 +555,59 @@ static void minix_syscall(void)
 			r = -MX_ENOTTY;
 			break;
 
+		case SIGACTION:
+		{
+			/* As 2.0.4's MM: sig in m1_i2, the new action at m1_p1,
+			 * the old one returned at m1_p2 (either may be NULL). */
+			int sig = msg_int(m, M1_I2);
+			uint32_t nsa = rd32(m + M1_P1);
+			uint32_t osa = rd32(m + M1_P2);
+			if (sig == MX_SIGKILL)
+				r = 0;
+			else if (sig < 1 || sig > MX_NSIG)
+				r = -MX_EINVAL;
+			else
+			{
+				if (osa)
+					memcpy(user_buffer(osa, SIGACTION_SIZE, 1), sigact[sig],
+					    SIGACTION_SIZE);
+				if (nsa)
+					memcpy(sigact[sig], user_buffer(nsa, SIGACTION_SIZE, 0),
+					    SIGACTION_SIZE);
+				r = 0;
+			}
+			break;
+		}
+
+		case SIGPROCMASK:
+		{
+			/* how in m2_i1, the set itself in m2_l1; the old mask is
+			 * returned in m2_l1. SIGKILL cannot be blocked. */
+			uint32_t set = rd32(m + M2_L1) & ~(1UL << MX_SIGKILL);
+			uint32_t old = sigmask;
+			r = 0;
+			switch (msg_int(m, M2_I1))
+			{
+				case MX_SIG_BLOCK: sigmask |= set; break;
+				case MX_SIG_UNBLOCK: sigmask &= ~set; break;
+				case MX_SIG_SETMASK: sigmask = set; break;
+				case MX_SIG_INQUIRE: break;
+				default: r = -MX_EINVAL; break;
+			}
+			if (r == 0)
+				wr32(m + M2_L1, old);
+			break;
+		}
+
+		case SIGRETURN:
+			/* The mask from m2_l1, then the registers from the
+			 * sigcontext at m2_p1, as 2.0.4's kernel does. */
+			sigmask = rd32(m + M2_L1) & ~(1UL << MX_SIGKILL);
+			r = restore_context(rd32(m + M2_P1));
+			if (r == 0)
+				restored = 1;
+			break;
+
 		default:
 			fail("unsupported system call %d to %s", call,
 			    who == 0 ? "MM" : who == 1 ? "FS" : "?");
@@ -500,7 +617,8 @@ static void minix_syscall(void)
 		fprintf(stderr, " -> %d\n", r);
 	wr16(m + M_SOURCE, who);
 	wr16(m + M_TYPE, (uint16_t)r);
-	m68k_set_reg(M68K_REG_D0, 0);
+	if (!restored)
+		m68k_set_reg(M68K_REG_D0, 0);
 }
 
 void cpu_instr_callback(int pc)
