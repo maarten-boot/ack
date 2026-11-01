@@ -88,3 +88,42 @@
   - Same for aar/inn/rck: pointer size (aar) and the fail() argument only
     differ when EM_WSIZE != EM_PSIZE (2 vs 4).
   Draft reply given to the user; user posted it on #376.
+- User pushed 6308d103c; CI run 41349425218 being watched.
+- Comment on PR #385 (upstream/led-align, ab20fbf49), davidgiven
+  2026-11-01: "we can probably dispense with the !USEMALLOC case entirely
+  and remove the #ifdef. It would simplify the code." Findings:
+  - `USEMALLOC` is only in `util/led/memory.c` (`#define USEMALLOC` at the
+    top, always on); util/opt has its own, separate USEMALLOC (not touched).
+  - The !USEMALLOC parts: the sbrk comment at the top, `GRANULE`, `BASE`,
+    `refused`, `sbreak()`, the brk() halves of `init_core()`, `move_up()`
+    and `compact()` (with `ALIGN`, `AT_LEAST`, `SHIFT_COUNT` and the
+    statistics message), and `copy_down()` / `copy_up()`. About 280 lines.
+    `<unistd.h>` there is only for brk/sbrk.
+  - Fork's util/led is identical to upstream/led-align.
+  Proposed: a second commit on upstream/led-align removing them (#385
+  picks it up on push), the same commit in the fork. Waiting for go-ahead.
+- CI 41348790182 (davidgiven/ack PR #389): build-linux, -macos, -windows
+  succeeded; basic/data_test ran on linux68k and pc86 (Linux, macOS).
+- CI 41349425218 (rosco-minix68k, 6308d103c): all three jobs succeeded;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User: "yes go ahead" (led !USEMALLOC removal).
+  - Scratch worktree on upstream/led-align (ab20fbf49), PLATS = cpm
+    linux68k linuxppc pc86 (not committed). Baseline: rc 0, 193 tests; md5
+    of the 583 files under the 225 ACKCLINK targets.
+  - util/led/memory.c without the !USEMALLOC parts: 810 -> 469 lines;
+    header, move_up() and compact() comments rewritten for malloc();
+    <unistd.h> dropped.
+  - After: rc 0, 193 tests, 225 links redone; only hilo_bas differs, and
+    its hilo.o too (BASIC compiler's heap address; this base is before
+    #375).
+  - -fsanitize=alignment build (OBJ=.obj-san, recoverable): rc 0, 193
+    tests, no reports. Since tools under ack may not reach the build log,
+    also linked hilo.c, startrek.c and hilo.bas for the four platforms with
+    UBSAN_OPTIONS=log_path: no reports; staged em_led and the four `as` are
+    instrumented, and a misaligned-load test program does report (control).
+    The util/ass reports named in #385's text are em_ass, which these four
+    platforms do not use.
+  - Committed 38656bd76 on upstream/led-align; cherry-picked to the fork as
+    1993308a5. Fork scratch build rc 0, 112 tests; minix204-test 37 passed,
+    0 failed, XFAIL core/calloc.
+  - Draft reply for #385 given to the user.
