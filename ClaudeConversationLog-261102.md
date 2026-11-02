@@ -73,3 +73,23 @@
     plat/minix68k/mkrelease.sh: README-minix68k.txt in the tarball says ego
     (-O2 and up) needs libconfig 1.7 (libconfig.so.9), package libconfig9 on
     Debian and Ubuntu.
+- CI 41518635686 (rosco-minix68k, e6b42068d): all three jobs succeeded;
+  schema 24, reader 120, minix204 37 passed, 0 failed, XFAIL core/calloc.
+- User: "an -O2 compile in the release smoke test and list the parked
+  tasks now".
+  - plat/minix68k/mkrelease.sh: the smoke test compiles and runs hello.c
+    with -O and with -O2 (-O2 runs ego, so a missing libconfig or a broken
+    ego pass now fails the release); message "smoke test ok, -O and -O2".
+  - Tried on the tarball of 41510099767 on this host: -O passes; -O2 fails
+    with "lib/ack/ego/cj: error while loading shared libraries:
+    libconfig.so.9", and ack exits non-zero, so the test catches it.
+  - Found on the way: this host has libconfig 1.7.3 as libconfig11
+    (libconfig.so.11); the CI runner (Ubuntu 24.04) builds against libconfig9
+    1.5-0.4build2 (libconfig.so.9). So the soname, not the version, is what
+    the tarball needs: README text corrected to "libconfig.so.9: the
+    libconfig9 package on Debian 12 and Ubuntu 22.04/24.04. Newer releases
+    ship libconfig.so.11 (libconfig11), which does not do."
+    Not done (a choice for the user): link libconfig statically in the
+    release build so the tarball runs on both.
+  - The -O2 pass on CI is checked by the next manual release run.
+  - Parked in Tasks.md (7 open): F1c, B1, P2, C + BASIC target, A3, N9, N6.
