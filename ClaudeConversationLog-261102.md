@@ -141,3 +141,14 @@
     unattended anywhere.
   - Noted in Tasks.md. Not implemented (BASIC deferred since 10-30; user's
     decision).
+- User: "yes commit". Committed as b1ffe3da3; user pushed.
+  CI 41524479677 (rosco-minix68k, b1ffe3da3): all three jobs succeeded;
+  schema 24, reader 120, minix204 37 passed, 0 failed, XFAIL core/calloc.
+- Manual release run 41526214552 on b1ffe3da3 (user dispatched): succeeded,
+  with the new step "static libconfig"; so Ubuntu 24.04's libconfig-dev 1.5
+  has libconfig.a. The glibc-only check passed; smoke test ok, -O and -O2.
+  Artifact ack-minix68k 3.6 MB (was 3.5 MB):
+  ack-minix68k-20261102-b1ffe3da3-linux-x86_64.tar.gz.
+  On this host (libconfig.so.11 only, where the 41510099767 tarball failed
+  -O2): lib/ack/ego/cs needs only libc.so.6 and ld-linux; a test program
+  compiled with -O2 and ran in the emulator, rc 0.
