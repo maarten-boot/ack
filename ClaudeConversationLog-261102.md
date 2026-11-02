@@ -152,3 +152,45 @@
   On this host (libconfig.so.11 only, where the 41510099767 tarball failed
   -O2): lib/ack/ego/cs needs only libc.so.6 and ld-linux; a test program
   compiled with -O2 and ran in the emulator, rc 0.
+- CI 41527735626 (rosco-minix68k, 8ef7cb22d): all three jobs succeeded;
+  schema 24, reader 120, minix204 37 passed, 0 failed, XFAIL core/calloc.
+- User opened and merged fork PR #5 "Rosco minix68k" (rosco-minix68k ->
+  default) as e445491b6. 41529291543 (PR, 8ef7cb22d) and 41529308140
+  (default, e445491b6): all three jobs succeeded in both; schema 24,
+  reader 120, minix204 37 passed, 0 failed.
+- User: "yes Close the C + BASIC task? and Implement B1 (BASIC ON ERROR
+  catching divide by zero)".
+  - Tasks.md: C + BASIC target closed (C and BASIC already work; Modula-2
+    and Pascal stay in).
+  - B1, the fix (generic, all platforms):
+    - lang/basic/lib/trpem.e (new): _trpem(trapno), an EM trap handler:
+      EIDIVZ and EFDIVZ -> _trpfatal(8) (8 = SIGFPE, as a hardware trap
+      arrives through signal()); other traps -> `lol 0; trp` (the trap
+      register is reset, so the default "trap N called" and exit), then
+      rtt. _sigtrp() installs it: lpi $_trpem; sig. Shape as _ctch_ in
+      head_ac.e and the catch example in doc/em/traps.nr.
+    - lang/basic/lib/trap.c: _ini_trp() calls _sigtrp() after the signal()
+      loop; _trap() calls _ini_trp() before its longjmp, so the handler is
+      set again after every caught error.
+    - lang/basic/lib/build.py: trpem.e in srcs, deps + "h" (em_abs.h, as
+      head_ac.e gets it).
+  - Not covered, and not needed: BASIC integer \ and MOD with 2-byte ints
+    are dvi 2/rmi 2 = divs.w (m68020 ncg table, WORD_SIZE==2): a zero
+    divide there is a CPU exception (vector 5), which Minix makes SIGFPE
+    and signal() already caught; the emulator stops on it ("zero divide")
+    and delivers no signals, so it cannot be tested here.
+  - Tests (fork, plat/minix68k/tests):
+    - build.py: test17 no longer skipped (expects "LINE 110: FATAL ERROR:
+      trap 8"); test18 still skipped (after the division it waits for
+      SIGINT).
+    - basic/divzero.bas + .b.g (new): 1/z caught by ON ERROR (err 8, erl
+      60), again (8, 120: the handler was set again), then not caught
+      (LINE 210: FATAL ERROR: trap 8). First version failed to compile: a
+      ':' in a REM line splits the statement in this BASIC; reworded.
+    - Without the fix (libbasic.a of the 41526214552 tarball) divzero
+      stops at once: "unknown file, line 60: trap 7 called", rc 37.
+    - Scratch worktree of 8ef7cb22d + the change: make rc 0, all minix68k
+      tests passed, test17 and divzero included. Worktree removed.
+  - Next (to propose): an upstream branch with the lang/basic/lib part only,
+    tried on the upstream test plats (cpm, linux68k, linuxppc, pc86);
+    pc86 probably also does floating point in software and traps EFDIVZ.

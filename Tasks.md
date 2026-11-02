@@ -85,8 +85,11 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   The compiler pushes the base first, so the exponent is `_power()`'s first
   parameter; the 1985 runtime computed `exp(first * log(second))`, the 2013 rewrite
   (`d5f010774`) `pow(first, second)`: `n ^ .5` gave `.5 ^ n`.
-- [ ] **B1 — BASIC cannot catch arithmetic errors on minix68k.** *(Deferred
-  2026-10-30: no BASIC work for now.)* The BASIC runtime
+- [x] **B1 — BASIC cannot catch arithmetic errors on minix68k** (fixed 2026-11-02:
+  `lang/basic/lib/trpem.e`, installed by `_ini_trp()`; test17 runs again, new test
+  `plat/minix68k/tests/basic/divzero`). Integer `\` and MOD use the 68000's
+  `divs.w`: that zero divide is a CPU exception, SIGFPE on the board, which
+  `signal()` already caught; the emulator stops on it. The BASIC runtime
   (`lang/basic/lib/trap.c`) catches errors with Unix signals (`signal(i, _trpfatal)`);
   a division by zero on minix68k is an EM trap (7, EFDIVZ, from the soft-float code)
   that `libem`'s `.trp` prints and exits on, it never becomes SIGFPE. So `ON ERROR`
@@ -250,7 +253,8 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   upstream at `7afa32a0a` and applies its own patch; today's fixes (F2 `cv`, E1/E2
   libem) reach the board only if it builds `rosco-minix68k` from this repository
   instead (after P1). A change in that project, for its owner.
-- [ ] **C + BASIC build target** (decided 2026-10-23, not implemented; *BASIC
+- [x] **C + BASIC build target** (closed 2026-11-02, user's decision: C and BASIC
+  already work, Modula-2 and Pascal stay in). (decided 2026-10-23; *BASIC
   part deferred 2026-10-30: no BASIC work for now, C and asm first*):
   `langs` parameter for `build_plat_libs()` (`plat/build.py`), `langs=("c","basic")`
   in `plat/minix68k/build.py`, a `c_basic` export in `build.py`, minix68k examples

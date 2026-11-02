@@ -86,16 +86,20 @@ test(
 )
 
 # The BASIC test programs (lang/basic/test) with their expected output.
-# test17 and test18 expect a division by zero to arrive as SIGFPE ("trap 8")
-# and be caught by the BASIC runtime's signal handlers; on minix68k it is an
-# EM trap (7, EFDIVZ) that is not turned into a signal (B1 in Tasks.md).
+# test17 expects a division by zero to be error 8 (SIGFPE); here it is an
+# EM trap (EFDIVZ), which the runtime's EM trap handler reports as 8 (B1).
+# test18 then waits for an interrupt (SIGINT), which no test can send.
 # test26 prints hex(-1)/oct(-1): 16 bits here, so its own expected output.
-# onerror (our own): LINE INPUT at the end of stdin (B3) caught by ON ERROR
-# (B4), then an error in the handler, which ends the program.
-BASIC_SKIP = {"test17", "test18"}
+# Our own: onerror, LINE INPUT at the end of stdin (B3) caught by ON ERROR
+# (B4), then an error in the handler, which ends the program; divzero, a
+# division by zero caught twice by ON ERROR, then not caught (B1).
+BASIC_SKIP = {"test18"}
 BASIC_EXPECTED = {"test26": "./basic/test26.b.g"}
 BASIC_DIR = "lang/basic/test"
-BASIC_OWN = {"onerror": "plat/minix68k/tests/basic"}
+BASIC_OWN = {
+    "onerror": "plat/minix68k/tests/basic",
+    "divzero": "plat/minix68k/tests/basic",
+}
 
 basic_tests = []
 for expected in sorted(glob(f"{BASIC_DIR}/*.b.g")) + [
