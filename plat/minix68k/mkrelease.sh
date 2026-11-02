@@ -45,6 +45,12 @@ Unpack anywhere and point ACKDIR at the directory:
 	export PATH=\$ACKDIR/bin:\$PATH
 	ack -mminix68k -O -o prog prog.c
 
+The programs need only the C library (glibc). The passes of the global
+optimizer (lib/ack/ego, run for -O2 and higher) contain libconfig,
+linked statically: libconfig is LGPL 2.1 or later, source at
+https://github.com/hyperrealm/libconfig; to use another libconfig, build
+ACK from the commit above (the ego passes get it through pkg-config).
+
 bin/minix68k-emu runs a minix68k program on a 68010 emulator with a small
 Minix system call layer (stdio, files, brk); any 68020/FPU instruction,
 odd word/long access or NULL access stops it with an error:
@@ -61,10 +67,25 @@ The rosco Minix port links with its own C library instead of ACK's:
 crtso.o emrts.o <objects> libc.a \$ACKDIR/share/ack/minix68k/libem.a
 \$ACKDIR/share/ack/minix68k/libend.a
 EOF
+
+# The README promises that the programs need only glibc: no libconfig.so
+# (the release workflow links libconfig.a) or any other shared library.
+extra=$(find "$work/$pkg" -type f -perm -u+x | while read -r f; do
+	ldd "$f" 2>/dev/null | awk -v f="${f#"$work/$pkg/"}" '
+		$1 !~ /^(linux-vdso\.so|libc\.so|\/lib64\/ld-linux)/ &&
+		/=>|^\t\// { print f ": " $1 }'
+done)
+if [ -n "$extra" ]; then
+	echo "$0: programs need shared libraries besides glibc:" >&2
+	echo "$extra" >&2
+	exit 1
+fi
+
 tar -C "$work" -czf "$outdir/$pkg.tar.gz" "$pkg"
 (cd "$outdir" && sha256sum "$pkg.tar.gz" > "$pkg.tar.gz.sha256")
 
 # Smoke test: unpack elsewhere, compile with only the unpacked tree, run it.
+# -O2 also runs the global optimizer ego (the passes with libconfig).
 mkdir "$work/test"
 tar -C "$work/test" -xzf "$outdir/$pkg.tar.gz"
 ACKDIR=$work/test/$pkg
@@ -80,11 +101,13 @@ int main(int argc, char **argv)
 	return 0;
 }
 EOF
-"$ACKDIR/bin/ack" -mminix68k -O -o "$work/hello" "$work/hello.c"
-got=$("$ACKDIR/bin/minix68k-emu" "$work/hello" rosco)
 want="hello rosco 70000 2 1414.214"
-if [ "$got" != "$want" ]; then
-	echo "$0: smoke test failed: got '$got', want '$want'" >&2
-	exit 1
-fi
-echo "$pkg.tar.gz: smoke test ok ($got)"
+for opt in -O -O2; do
+	"$ACKDIR/bin/ack" -mminix68k $opt -o "$work/hello" "$work/hello.c"
+	got=$("$ACKDIR/bin/minix68k-emu" "$work/hello" rosco)
+	if [ "$got" != "$want" ]; then
+		echo "$0: smoke test $opt failed: got '$got', want '$want'" >&2
+		exit 1
+	fi
+done
+echo "$pkg.tar.gz: smoke test ok, -O and -O2 ($got)"

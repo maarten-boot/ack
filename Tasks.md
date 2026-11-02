@@ -94,6 +94,14 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   signal number). Fix: let `.trp` raise a signal for unhandled traps, or let the
   BASIC runtime install an EM trap handler (`sig`); the emulator would need signal
   delivery to test it.
+  *Feasible (checked 2026-11-02), no signals needed:* a small `.e` file in
+  `lang/basic/lib` with a handler like `_ctch_` in `head_ac.e` (there under
+  `CATCHHANDLER`, off, and it uses `kill()`): EIDIVZ/EFDIVZ → `_trpfatal(8)`
+  (8 = SIGFPE, what test17/test18 expect), other traps re-raised with `trp`
+  (default: "trap N called", exit). `_ini_trp()` installs it with `sig`, and
+  reinstalls it after every caught error (`.trp` clears `.trppc` before calling).
+  Generic: on every platform where these errors are EM traps, not SIGFPE.
+  Testable in the emulator: test17, and test18 without its SIGINT part.
 - [x] **B2 — ACK BASIC programs only run where they were compiled** (fixed
   2026-10-30, all platforms). DATA is now in the program: the compiler collects the
   DATA text in memory (`datprintf()`) and emits it as `_datatext` next to
@@ -247,6 +255,12 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   `langs` parameter for `build_plat_libs()` (`plat/build.py`), `langs=("c","basic")`
   in `plat/minix68k/build.py`, a `c_basic` export in `build.py`, minix68k examples
   without `.mod`/`.p` (`examples/build.py`).
+  *Checked 2026-11-02:* C and BASIC already work: `build_plat_libs()` builds the
+  libraries of all four languages for every plat, and the release tarball has
+  `em_bem` and `libbasic.a` (the BASIC tests run in the emulator). What is left
+  is only dropping Modula-2 and Pascal (`em_m2`, `em_pc`, `libmodula2.a`,
+  `libpascal.a`: about 1.2 MB of the 8.6 MB tarball), at the cost of fork
+  changes in three upstream files (merge conflicts later).
 - [x] **Linux release workflow for minix68k** (written 2026-10-29; first run on
   GitHub with the first `minix68k-*` tag): `.github/workflows/minix68k-release.yml`
   builds, runs all tests, and packages with `plat/minix68k/mkrelease.sh` (tarball of
