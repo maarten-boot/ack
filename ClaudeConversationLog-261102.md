@@ -56,3 +56,20 @@
   float-fold c8caa951e, led-align 38656bd76, libc-fixes e6e11b09d,
   ncg-gc-cc 1e3151950, tests-plat-wordsize 1155d5a4f, ub-fixes 1c1a655da,
   volatile-nop c1042edd0.
+- CI 41496226471 (rosco-minix68k, 5228bf54b): all three jobs succeeded;
+  schema 24, reader 120, minix204 37 passed, 0 failed, XFAIL core/calloc.
+- Manual run of minix68k-release.yml (user dispatched it; the gh token here
+  gets HTTP 403 on workflow dispatch): 41510099767 on 5228bf54b succeeded.
+  apt and pip steps, build and test, package, upload passed; release
+  skipped (not a tag). Artifact ack-minix68k (3.5 MB):
+  ack-minix68k-20261102-5228bf54b-linux-x86_64.tar.gz, smoke test ok
+  (hello rosco 70000 2 1414.214).
+  - Checked the tarball with ldd: lib/ack/ego/{bo,cj,cs,il,lv,ra,sp,sr,ud}
+    need libconfig.so.9; bin/ack and the other passes do not. ego runs only
+    for -O2 and higher ("optimizer 2" in lib/descr/fe), so -O and the smoke
+    test (-O) work without libconfig. (Correction: the entry above said
+    "ego (-O)"; it is -O2 and up.)
+  - User: "yes add the libconfig note to the release docs".
+    plat/minix68k/mkrelease.sh: README-minix68k.txt in the tarball says ego
+    (-O2 and up) needs libconfig 1.7 (libconfig.so.9), package libconfig9 on
+    Debian and Ubuntu.

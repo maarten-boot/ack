@@ -45,6 +45,10 @@ Unpack anywhere and point ACKDIR at the directory:
 	export PATH=\$ACKDIR/bin:\$PATH
 	ack -mminix68k -O -o prog prog.c
 
+The global optimizer (ego, run for -O2 and higher) needs libconfig 1.7
+(libconfig.so.9): on Debian and Ubuntu install the libconfig9 package.
+-O and no -O do not use it.
+
 bin/minix68k-emu runs a minix68k program on a 68010 emulator with a small
 Minix system call layer (stdio, files, brk); any 68020/FPU instruction,
 odd word/long access or NULL access stops it with an error:
