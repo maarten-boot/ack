@@ -31,6 +31,8 @@ void _trpfatal(int i)
 	_trap();
 }
 
+void _sigtrp(void); /* trpem.e: EM traps (division by zero) to _trpfatal */
+
 void _ini_trp(void)
 {
 	/* initialize trap routines */
@@ -38,6 +40,7 @@ void _ini_trp(void)
 
 	for (i = 0; i < NSIG; i++)
 		signal(i, _trpfatal);
+	_sigtrp();
 }
 
 void _settrap(int nr)

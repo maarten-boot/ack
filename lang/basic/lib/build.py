@@ -42,9 +42,10 @@ for plat in PLATS:
             "./swap.c",
             "./trace.c",
             "./trap.c",
+            "./trpem.e",
             "./write.c",
         ],
-        deps=["lang/cem/libcc.ansi/headers"],
+        deps=["lang/cem/libcc.ansi/headers", "h"],
     )
 
     export(
