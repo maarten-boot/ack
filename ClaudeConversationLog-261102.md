@@ -42,3 +42,17 @@
     failed.
   - minix68k-release.yml has the new dependencies but has not run yet (only
     on a minix68k-* tag or a manual run).
+- CI 41488171119 (rosco-minix68k, b45ae9847): all three jobs succeeded;
+  schema 24, reader 120, minix204 37 passed, 0 failed, XFAIL core/calloc.
+- Branch cleanup. The fork had 15 upstream/* branches; 14 were exactly at
+  the head of their merged davidgiven/ack PR (#375-#387, #389), and
+  upstream/basic-repro (97209cf88, no PR) has the same patch-id as
+  9dee5b498, which is in upstream default via #375.
+  User deleted all 15 on GitHub and locally (first attempt did not take;
+  rechecked: 0 left). The fork now has only default and rosco-minix68k.
+  Heads, for restoring: basic-data-test 9f150bd9d, basic-fixes b83a4b45d,
+  basic-repro 97209cf88, ci-actions d406b33a7, codegen-fixes 7eb551ec9,
+  cpp-escape cb29db892, cpp-longpath 509093957, ego-fixes 138489ccd,
+  float-fold c8caa951e, led-align 38656bd76, libc-fixes e6e11b09d,
+  ncg-gc-cc 1e3151950, tests-plat-wordsize 1155d5a4f, ub-fixes 1c1a655da,
+  volatile-nop c1042edd0.
