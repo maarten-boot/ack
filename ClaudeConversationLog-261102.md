@@ -194,3 +194,30 @@
   - Next (to propose): an upstream branch with the lang/basic/lib part only,
     tried on the upstream test plats (cpm, linux68k, linuxppc, pc86);
     pc86 probably also does floating point in software and traps EFDIVZ.
+- User: "yes commit, and prepare the upstream branch". Committed the fix
+  alone as 20a85d125 (lang/basic/lib only) and the minix68k tests, Tasks.md
+  and log as b765fffdb.
+- upstream/basic-divzero (local, not pushed): upstream default c9bccd0f0 +
+  cherry-pick of 20a85d125 = bbe62a88a.
+  - Upstream's Makefile refuses PLATS on the command line (PLATS = all in
+    the file): first attempt stopped at once; plain make then.
+  - make (all platforms): rc 0, 12m12s, 226 tests passed, libbasic.a for
+    14 plats (trpem.e compiles for all).
+  - divzero.bas on the upstream test plats, new libbasic vs old behaviour
+    (a C stub _sigtrp() {} linked in place of the library's):
+    pc86 prints " 0", linux68k " nan", linuxppc " inf", then "not
+    caught"; cpm "TRAP!" (no floats). Same with and without the fix: none
+    of them traps a floating division by zero.
+    Integer \ (divint.bas): hardware divide everywhere: pc86 "unknown
+    interrupt 0x00", linux68k emulator stops at divs.l, linuxppc " 0";
+    cpm TRAP!. Same with and without.
+  - Upstream, no platform builds mach/proto/fp (the trapping soft-float
+    the fork uses for m68k2 since F1), and no EM interpreter is built.
+    So the fix is harmless upstream but has no platform where it shows;
+    it matters for minix68k (fork) and in principle for em22.
+  - Recommendation to the user: keep it in the fork; offer upstream only
+    if wanted (PR text then says it is reachable via EM traps only, shown
+    on the fork's minix68k).
+- User: "keep it in the fork, delete the branch, commit the log". The B1
+  fix stays in the fork only (20a85d125). Local branch
+  upstream/basic-divzero deleted (was bbe62a88a; never pushed).
