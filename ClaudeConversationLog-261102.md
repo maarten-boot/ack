@@ -31,3 +31,14 @@
     the release tarball needs libconfig on the target host for ego (-O).
   - User: "yes go ahead". Merge committed as 84c72ab4d; rosco-minix68k
     fast-forwarded to it. Scratch worktree removed.
+- User pushed. CI 41484714837 (rosco-minix68k, f9579a49b, first run with
+  the merge): build-linux, -sanitizers, -clang succeeded; the new apt and
+  pip dependencies installed; schema tests 24 passed, reader tests 120
+  passed; minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User opened and merged fork PR #4 "Rosco minix68k sync from upstream"
+  (rosco-minix68k -> default) as 8be038582.
+  - 41486842208 (PR #4) and 41486861923 (default, 8be038582): all three
+    jobs succeeded in both; schema 24, reader 120, minix204 37 passed, 0
+    failed.
+  - minix68k-release.yml has the new dependencies but has not run yet (only
+    on a minix68k-* tag or a manual run).
