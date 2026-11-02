@@ -139,3 +139,37 @@
     (41223452353), before this change: the branch's base 7afa32a0a predates
     upstream's 16d8c4229 (m2 aliasing) and 7ea8f9976 (Lua 5.5). The PR run
     tests the merge with current default and passes. Not caused by led.
+- CI 41353218932 (rosco-minix68k, 7e14695d2): all three jobs succeeded.
+- User merged fork PR #3 (rosco-minix68k -> default) as 5fa6e5088; CI
+  41353766162 on default: all three jobs succeeded; basic/data_test ran;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User posted the reply on davidgiven/ack #385 (led without brk()).
+- CI 41354887159 (rosco-minix68k, b7416b98f): all three jobs succeeded;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- User: the updated minix2 in ../minix-st-2.0.4 may have fixed calloc.
+  Read-only look:
+  - Local branch rosco-m68k at c17cc1a (= the CI pin; origin/rosco-m68k on
+    GitHub is the same). Uncommitted changes: logs, src/kernel/roscdisk.c,
+    src/rosco (Makefile, rootfs), a new ROSCO_M68K_LOG_2026-10-31.md, and
+    src/rosco/test/tmem.c; nothing under src/lib or include.
+  - src/lib/ansi/calloc.c unchanged since the initial import (65b5fc7): no
+    overflow check.
+  - Their own log found it too (ROSCO_M68K_LOG_2026-10-22.md, "calloc()
+    does not check nelem*elsize for overflow (16-bit size_t)") and lists
+    it under "Open ... Library"; no later log mentions a fix.
+  - A stale remote-tracking ref lockdown/rosco-m68k (3b61801, 2026-10-21,
+    "sigreturn restores the condition codes") is older and not an ancestor.
+  When calloc is fixed and pushed: move MINIX204_SHA in ccpp.yml and drop
+  the xfail in minix204.sh (an XPASS fails the test, so the fix shows up).
+- CI 41355716201 (rosco-minix68k, 66454fd47): all three jobs succeeded;
+  minix204-test 37 passed, 0 failed, XFAIL core/calloc.
+- Upstream: davidgiven merged #385 (led-align, 2026-11-01 21:38, "Excellent,
+  thanks. Merging.") and #389 (basic-data-test, 21:46).
+- #376 (tests-plat-wordsize, 1155d5a4f): the user's reply is posted (plus a
+  note that the 68010 is for a Minix 2 port to rosco_m68k); no answer yet.
+  Its checks are from run 41076610938 (2026-10-30): linux succeeded, macOS
+  failed (em_m2 died with signal 6) and Windows failed (em_table_lib.lua:8,
+  Lua 5.5 const) - the same two failures as the fork's led-align run, fixed
+  upstream since by 16d8c4229 and 7ea8f9976. A new CI run (re-run by a
+  maintainer, or a rebase onto current default and force-push) would show
+  green.

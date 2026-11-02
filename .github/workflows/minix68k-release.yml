@@ -26,10 +26,15 @@ jobs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
     - name: apt
-      run: sudo apt-get update && sudo apt-get install -y bison flex lua5.3 ninja-build
+      run: sudo apt-get update && sudo apt-get install -y bison flex lua5.3 ninja-build libconfig-dev pkg-config python3-pip
+
+    - name: Python build dependencies
+      run: python3 -m pip install --target .obj/python-deps libconf==2.0.1
 
     - name: build and test
       run: make -j"$(nproc)"
+      env:
+        PYTHONPATH: ${{ github.workspace }}/.obj/python-deps
 
     - name: package
       run: |

@@ -1,7 +1,10 @@
 name: C/C++ CI
 
+env:
+  PYTHONPATH: ${{ github.workspace }}/.obj/python-deps
+
 concurrency:
-  group: environment-${{ github.head_ref || github.ref }}
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 on: [push, pull_request]
@@ -12,9 +15,21 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: apt
-      run: sudo apt update && sudo apt install bison flex lua5.3
+      run: sudo apt update && sudo apt install bison flex lua5.3 libconfig-dev pkg-config python3-pip
+    - name: Python build dependencies
+      run: python3 -m pip install --target .obj/python-deps libconf==2.0.1
     - name: make
       run: make
+    - name: Description schema tests
+      run: >-
+        python3 util/ego/descr/test_schemachecker.py
+        util/ego/descr/schemachecker.py
+        .obj/util/ego/+i386_descr/i386.descr
+        .obj/modules/src/em_data/+em_data_hdr/em_mnem.h
+    - name: Description reader tests
+      run: >-
+        python3 util/ego/descr/test_readers.py
+        .obj/staging/lib/ack/ego .obj/staging/share/ack/ego/*.descr
     # minix68k programs linked with the Minix 2.0.4 C library, as on the
     # rosco_m68k board (plat/minix68k/tests/minix204.sh). The library comes
     # from the minix-st-2.0.4 repository at a pinned commit; move the pin
@@ -43,7 +58,9 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: apt
-      run: sudo apt update && sudo apt install bison flex lua5.3
+      run: sudo apt update && sudo apt install bison flex lua5.3 libconfig-dev pkg-config python3-pip
+    - name: Python build dependencies
+      run: python3 -m pip install --target .obj/python-deps libconf==2.0.1
     - name: make with sanitizers
       run: make "CC=$SAN" "HOSTCC=$SAN"
 
@@ -54,6 +71,8 @@ jobs:
     steps:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
     - name: apt
-      run: sudo apt update && sudo apt install bison flex lua5.3 clang
+      run: sudo apt update && sudo apt install bison flex lua5.3 libconfig-dev pkg-config python3-pip clang
+    - name: Python build dependencies
+      run: python3 -m pip install --target .obj/python-deps libconf==2.0.1
     - name: make with clang
       run: make CC=clang HOSTCC=clang
