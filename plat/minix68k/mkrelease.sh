@@ -45,10 +45,11 @@ Unpack anywhere and point ACKDIR at the directory:
 	export PATH=\$ACKDIR/bin:\$PATH
 	ack -mminix68k -O -o prog prog.c
 
-The global optimizer (ego, run for -O2 and higher) needs the shared
-library libconfig.so.9: the libconfig9 package on Debian 12 and Ubuntu
-22.04/24.04. Newer releases ship libconfig.so.11 (libconfig11), which
-does not do. -O and no -O do not use it.
+The programs need only the C library (glibc). The passes of the global
+optimizer (lib/ack/ego, run for -O2 and higher) contain libconfig,
+linked statically: libconfig is LGPL 2.1 or later, source at
+https://github.com/hyperrealm/libconfig; to use another libconfig, build
+ACK from the commit above (the ego passes get it through pkg-config).
 
 bin/minix68k-emu runs a minix68k program on a 68010 emulator with a small
 Minix system call layer (stdio, files, brk); any 68020/FPU instruction,
@@ -66,11 +67,25 @@ The rosco Minix port links with its own C library instead of ACK's:
 crtso.o emrts.o <objects> libc.a \$ACKDIR/share/ack/minix68k/libem.a
 \$ACKDIR/share/ack/minix68k/libend.a
 EOF
+
+# The README promises that the programs need only glibc: no libconfig.so
+# (the release workflow links libconfig.a) or any other shared library.
+extra=$(find "$work/$pkg" -type f -perm -u+x | while read -r f; do
+	ldd "$f" 2>/dev/null | awk -v f="${f#"$work/$pkg/"}" '
+		$1 !~ /^(linux-vdso\.so|libc\.so|\/lib64\/ld-linux)/ &&
+		/=>|^\t\// { print f ": " $1 }'
+done)
+if [ -n "$extra" ]; then
+	echo "$0: programs need shared libraries besides glibc:" >&2
+	echo "$extra" >&2
+	exit 1
+fi
+
 tar -C "$work" -czf "$outdir/$pkg.tar.gz" "$pkg"
 (cd "$outdir" && sha256sum "$pkg.tar.gz" > "$pkg.tar.gz.sha256")
 
 # Smoke test: unpack elsewhere, compile with only the unpacked tree, run it.
-# -O2 also runs the global optimizer ego (and so needs libconfig).
+# -O2 also runs the global optimizer ego (the passes with libconfig).
 mkdir "$work/test"
 tar -C "$work/test" -xzf "$outdir/$pkg.tar.gz"
 ACKDIR=$work/test/$pkg

@@ -31,6 +31,18 @@ jobs:
     - name: Python build dependencies
       run: python3 -m pip install --target .obj/python-deps libconf==2.0.1
 
+    # The ego passes use libconfig; link libconfig.a so the tarball does not
+    # need a particular libconfig.so (Ubuntu 24.04 has .so.9, newer .so.11).
+    # The build gets libconfig's flags from pkg-config: give it a copy of
+    # libconfig.pc that links the static library.
+    - name: static libconfig
+      run: |
+        mkdir -p "$RUNNER_TEMP/pc-static"
+        sed 's/^Libs:.*/Libs: -L${libdir} -l:libconfig.a/' \
+          "$(pkg-config --variable=pcfiledir libconfig)/libconfig.pc" \
+          > "$RUNNER_TEMP/pc-static/libconfig.pc"
+        echo "PKG_CONFIG_PATH=$RUNNER_TEMP/pc-static" >> "$GITHUB_ENV"
+
     - name: build and test
       run: make -j"$(nproc)"
       env:
