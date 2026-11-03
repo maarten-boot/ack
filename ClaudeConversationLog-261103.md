@@ -116,3 +116,16 @@
   > linked with `-lm` is identical to the one linked without it.
   >
   > 🤖 Generated with [Claude Code](https://claude.com/claude-code)
+- User: "yes commit". Committed as 06b05ed61. User pushed rosco-minix68k
+  (the first push did not include the upstream branches), then
+  upstream/ass-align and upstream/descr-lflag.
+  - CI 41604941311 (rosco-minix68k, 06b05ed61): all three jobs succeeded;
+    schema 24, reader 120, minix204 37 passed, 0 failed, XFAIL core/calloc.
+  - CI 41605135921 (upstream/ass-align, 00365a7be) and 41605135492
+    (upstream/descr-lflag, 81521e46e), upstream's workflow: build-linux,
+    build-macos, build-windows succeeded in both.
+  - Both ready for a PR to davidgiven/ack default; texts above.
+- User opened the PRs: davidgiven/ack #391 (upstream/ass-align) and #392
+  (upstream/descr-lflag).
+  - CI 41608679766 (#391, 00365a7be) and 41608884341 (#392, 81521e46e):
+    build-linux, build-macos, build-windows succeeded in both.
