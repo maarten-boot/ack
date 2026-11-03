@@ -340,7 +340,9 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   any length. Line directives are now echoed (prefix and number formatted into 32
   bytes), `__FILE__` gets `realloc`ed. Test: `lang/cem/cpp.ansi/longpath.sh`
   (a 600+ character path and a 2000-character `#line` name).
-- [ ] **A3 — misaligned structs in `util/ass`** (found 2026-10-31, upstream build
+- [ ] **A3 — misaligned structs in `util/ass`** *(fixed 2026-11-03 on branch
+  `upstream/ass-align`, `00365a7be`: 919 reports → 0, em22 output identical;
+  for an upstream PR)* (found 2026-10-31, upstream build
   with all platforms; not used by minix68k). `-fsanitize=alignment`: 948 reports
   in em22's assembler (`ass00.c`, `ass30.c`-`ass80.c`, `assci.c`, `asscm.c`,
   `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
@@ -364,6 +366,13 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   string literal (`"`, `\` escaped, control characters in octal) for both. Test:
   `lang/cem/cpp.ansi/longpath.sh` (a directory `q"b\c`, the output read back, and
   `#line` with escapes).
+- [ ] **N13 — pc86: `sqrt(2.0)` prints `3.030`** (found 2026-11-03, upstream, while
+  testing N9; low, not minix68k). `printf("%.3f", sqrt(x))` with `volatile double x = 2.0`,
+  linked with or without `-lm` (same binary), prints `3.030` in `plat/pc86/emu`;
+  linux68k prints `1.414`. Not looked at: sqrt, the float code or printf.
+- [ ] **N14 — linuxppc emulator: no `frsp`** (found 2026-11-03, upstream; low). The
+  same program stops with "unimplemented instruction 0xffe00818 (major opcode 63)":
+  opcode 63, extended opcode 12, `frsp`. Same family as the fmul/fadds fix (#381).
 - [x] **N12 — powerpc ncg and mcg cannot compile a volatile access.** (fixed
   2026-10-30) cemcom.ansi emits `nop` after a volatile access (`eval.c`);
   `mach/powerpc/ncg/table` had no `pat nop` ("No table entry for 86" on linuxppc
@@ -371,7 +380,10 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   'nop'", linuxmips). The other back ends have one. Now `pat nop` with `kills
   ALL` in the powerpc table, and `op_nop` ignored in mcg. Test:
   `tests/plat/core/volatile,e,.c`.
-- [ ] **N9 — `-l<name>` is broken on the other platforms too.** linux68k, linuxppc,
+- [ ] **N9 — `-l<name>` is broken on the other platforms too.** *(fixed 2026-11-03 on
+  branch `upstream/descr-lflag`, `81521e46e`, all 15 descr files; for an upstream PR.
+  em22: `-l` finds the file, but `em_ass` cannot take libc.a twice or a whole
+  extra library.)* linux68k, linuxppc,
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
   `.a` (the linker cannot open it), and no platform builds a `libm`. Same fix as F4
   if those platforms matter (upstream).
