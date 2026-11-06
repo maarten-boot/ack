@@ -340,9 +340,9 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   any length. Line directives are now echoed (prefix and number formatted into 32
   bytes), `__FILE__` gets `realloc`ed. Test: `lang/cem/cpp.ansi/longpath.sh`
   (a 600+ character path and a 2000-character `#line` name).
-- [ ] **A3 — misaligned structs in `util/ass`** *(fixed 2026-11-03 on branch
-  `upstream/ass-align`, `00365a7be`: 919 reports → 0, em22 output identical;
-  for an upstream PR)* (found 2026-10-31, upstream build
+- [x] **A3 — misaligned structs in `util/ass`** *(fixed 2026-11-03,
+  `00365a7be`: 919 reports → 0, em22 output identical; merged upstream as
+  davidgiven/ack #391 on 2026-11-03)* (found 2026-10-31, upstream build
   with all platforms; not used by minix68k). `-fsanitize=alignment`: 948 reports
   in em22's assembler (`ass00.c`, `ass30.c`-`ass80.c`, `assci.c`, `asscm.c`,
   `assrl.c`): `struct line_t`, `relc_t`, `freeblock`, `locl_t`, `stat_t` at 4
@@ -380,8 +380,8 @@ deferred since 2026-10-30; Modula-2 and Pascal not planned).
   'nop'", linuxmips). The other back ends have one. Now `pat nop` with `kills
   ALL` in the powerpc table, and `op_nop` ignored in mcg. Test:
   `tests/plat/core/volatile,e,.c`.
-- [ ] **N9 — `-l<name>` is broken on the other platforms too.** *(fixed 2026-11-03 on
-  branch `upstream/descr-lflag`, `81521e46e`, all 15 descr files; for an upstream PR.
+- [x] **N9 — `-l<name>` is broken on the other platforms too.** *(fixed 2026-11-03,
+  `81521e46e`, all 15 descr files; merged upstream as davidgiven/ack #392 on 2026-11-03.
   em22: `-l` finds the file, but `em_ass` cannot take libc.a twice or a whole
   extra library.)* linux68k, linuxppc,
   linux386, linuxmips, osxppc, em22, cpm map `-l*` to `{PLATFORMDIR}/lib*` without
